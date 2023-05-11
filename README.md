@@ -1,1 +1,1 @@
-# pypowsybl-grid2opbackend
+# pypowsybl-grid2opbackend integration (AIRGo project)
