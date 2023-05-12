@@ -10,12 +10,11 @@ import os  # load the python os default module
 import sys  # laod the python sys default module
 import copy
 import warnings
-
 import numpy as np
 import pandas as pd
 
 import pandapower as pdp
-import pypowsybl as pow
+import pypowsybl as ppow
 import scipy
 import copy
 
@@ -94,6 +93,8 @@ class PowsyblBackend(Backend):
         self.dim_topo = -1
         self._number_true_line = -1
 
+        self.tol = None
+
 
 
 
@@ -126,11 +127,11 @@ class PowsyblBackend(Backend):
                     _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0]+'.mat', init='flat')
                 else:
                     _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0]+'.mat')
-                self._grid = pow.network.load(full_path.split('.')[0]+'.mat', {'matpower.import.ignore-base-voltage': 'false'})
+                self._grid = ppow.network.load(full_path.split('.')[0]+'.mat', {'matpower.import.ignore-base-voltage': 'false'})
             elif full_path.endswith('.mat'):
-                self._grid = pow.network.load(full_path, {'matpower.import.ignore-base-voltage': 'false'})
+                self._grid = ppow.network.load(full_path, {'matpower.import.ignore-base-voltage': 'false'})
             elif full_path.endswith('.xiidm'):
-                self._grid = pow.network.load(full_path)
+                self._grid = ppow.network.load(full_path)
             else:
                 raise RuntimeError('This type of file is not handled try a .mat, .xiidm or .json format')
 
@@ -141,25 +142,16 @@ class PowsyblBackend(Backend):
         # with warnings.catch_warnings():
         #     warnings.filterwarnings("ignore")
         #     try:
-        #         pow.loadflow.run_ac(
+        #         ppow.loadflow.run_ac(
         #             self._grid,
         #             distributed_slack=self._dist_slack
         #         )
-        #     except pow.powerflow.LoadflowNotConverged:
-        #         pow.loadflow.run_dc(
+        #     except ppow.powerflow.LoadflowNotConverged:
+        #         ppow.loadflow.run_dc(
         #             self._grid,
         #             distributed_slack=self._dist_slack,
         #         )
 
-
-
-        self.name_load = np.array(self._grid.get_loads()["name"].index.to_list())
-        self.name_gen = np.array(self._grid.get_generators()["name"].index.to_list())
-        self.name_line = np.array(self._grid.get_lines()["name"].index.to_list()+
-                                  self._grid.get_2_windings_transformers()["name"].index.to_list()+
-                                  self._grid.get_3_windings_transformers()["name"].index.to_list())
-        self.name_storage = np.array(self._grid.get_batteries()["name"].index.to_list()) # By default in powsybl only one type of storage : batteries
-        self.name_sub = np.array(["sub_{}".format(i) for i in self._grid.get_buses()["name"].index.to_list()])
 
         # and now initialize the attributes (see list bellow)
         self.n_line = copy.deepcopy(self._grid.get_lines().shape[0]) + \
@@ -168,6 +160,23 @@ class PowsyblBackend(Backend):
         self.n_gen = copy.deepcopy(self._grid.get_generators().shape[0])  # number of generators in the grid should be read from self._grid
         self.n_load = copy.deepcopy(self._grid.get_loads().shape[0])  # number of loads in the grid should be read from self._grid
         self.n_sub = copy.deepcopy(self._grid.get_buses().shape[0])  # we give as an input the number of buses that seems to be corresponding to substations in Grid2op
+        self.n_storage = copy.deepcopy(self._grid.get_batteries().shape[0])
+
+
+        # TODO protection against empty columns
+        self.name_load = np.array(self._grid.get_loads()["name"].index.to_list())
+        self.name_gen = np.array(self._grid.get_generators()["name"].index.to_list())
+        self.name_line = np.array(self._grid.get_lines()["name"].index.to_list()+
+                                  self._grid.get_2_windings_transformers()["name"].index.to_list()+
+                                  self._grid.get_3_windings_transformers()["name"].index.to_list())
+        self.name_sub = np.array(["sub_{}".format(i) for i in self._grid.get_buses()["name"].index.to_list()])
+
+
+        if self.n_storage == 0:
+            self.set_no_storage() #deactivate storage in grid objects
+        else:
+            self.name_storage = np.array(self._grid.get_batteries()[
+                                             "name"].index.to_list())  # By default in powsybl only one type of storage : batteries
 
         # print(self._grid.get_operational_limits(all_attributes=True))
 
@@ -189,8 +198,6 @@ class PowsyblBackend(Backend):
 
         self.sub_info = np.zeros(self.n_sub, dtype=dt_int)
 
-        pos_already_used = np.zeros(self.n_sub, dtype=dt_int)
-
         self.load_to_subid = np.zeros(self.n_load, dtype=dt_int)
         self.gen_to_subid = np.zeros(self.n_gen, dtype=dt_int)
         self.line_or_to_subid = np.zeros(self.n_line, dtype=dt_int)
@@ -200,6 +207,10 @@ class PowsyblBackend(Backend):
         self.gen_to_sub_pos = np.zeros(self.n_gen, dtype=dt_int)
         self.line_or_to_sub_pos = np.zeros(self.n_line, dtype=dt_int)
         self.line_ex_to_sub_pos = np.zeros(self.n_line, dtype=dt_int)
+
+        if self.n_storage > 0:
+            self.storage_to_subid = np.zeros(self.n_storage, dtype=dt_int)
+            self.storage_to_sub_pos = np.zeros(self.n_storage, dtype=dt_int)
 
         #TODO handle storage and other non classical objects
 
@@ -234,6 +245,7 @@ class PowsyblBackend(Backend):
             pos_already_used[self.line_ex_to_subid[i]] += 1
 
         self._number_true_line = copy.deepcopy(self._grid.get_lines().shape[0])
+
         # For generators
         self.gen_to_subid = np.array([self.map_sub[i] for i in self._grid.get_generators()["bus_id"].to_list()])
 
@@ -251,6 +263,15 @@ class PowsyblBackend(Backend):
             self.load_to_sub_pos[i] = pos_already_used[self.load_to_subid[i]]
             pos_already_used[self.load_to_subid[i]] += 1
 
+        # For storage
+        self.storage_to_subid = np.array([self.map_sub[i] for i in self._grid.get_batteries()["bus_id"].to_list()])
+
+        if self.n_storage > 0:
+            for i in range(len(self.storage_to_subid)):
+                self.sub_info[self.storage_to_subid[i]] += 1
+                self.storage_to_sub_pos[i] = pos_already_used[self.storage_to_subid[i]]
+                pos_already_used[self.storage_to_subid[i]] += 1
+
         self.p_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
         self.q_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
         self.v_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
@@ -266,9 +287,9 @@ class PowsyblBackend(Backend):
         self.prod_p = np.full(self.n_gen, dtype=dt_float, fill_value=np.NaN)
         self.prod_v = np.full(self.n_gen, dtype=dt_float, fill_value=np.NaN)
         self.prod_q = np.full(self.n_gen, dtype=dt_float, fill_value=np.NaN)
-        # self.storage_p = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
-        # self.storage_q = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
-        # self.storage_v = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
+        self.storage_p = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
+        self.storage_q = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
+        self.storage_v = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
         self._nb_bus_before = None
 
         #TODO check the other lines of code in PandaPowerBackend
@@ -277,138 +298,192 @@ class PowsyblBackend(Backend):
         self.theta_ex = np.full(self.n_line, fill_value=np.NaN, dtype=dt_float)
         self.load_theta = np.full(self.n_load, fill_value=np.NaN, dtype=dt_float)
         self.gen_theta = np.full(self.n_gen, fill_value=np.NaN, dtype=dt_float)
-        # self.storage_theta = np.full(self.n_storage, fill_value=np.NaN, dtype=dt_float)
+        self.storage_theta = np.full(self.n_storage, fill_value=np.NaN, dtype=dt_float)
 
         # for i, (_, row) in enumerate(self._grid.get_loads().iterrows()):
         self.dim_topo = np.sum(self.sub_info)
         self._compute_pos_big_topo()
-        #TODO find thermal limitation in matpower import
 
-        self.thermal_limit_a = np.array([1000000]*len(self.line_or_to_subid))
+
+        #TODO find thermal limitation in matpower import because this is only a hack
+        # if self._grid.get_operational_limits().empty==True: # I have to set up some so I decide to put huge one
+        #     self.thermal_limit_a = np.array([1000000]*len(self.line_or_to_subid))
+        # else :
+
         # self.thermal_limit_a = self.thermal_limit_a.astype(dt_float)
 
         self.line_status[:] = self._get_line_status()
         self._topo_vect = self._get_topo_vect()
+        self.tol = 1e-5  # this is NOT the pandapower tolerance !!!! this is used to check if a storage unit
+        # produce / absorbs anything
 
+    def storage_deact_for_backward_comaptibility(self):
+        self._init_private_attrs()
 
     def apply_action(self, action):
         pass
 
     def runpf(self, is_dc=False):
-        if is_dc:
-            res = pow.loadflow.run_dc(self._grid, parameters=pow.loadflow.Parameters(distributed_slack=self._dist_slack))
-        else:
-            res = pow.loadflow.run_ac(self._grid, parameters=pow.loadflow.Parameters(distributed_slack=self._dist_slack))
-            print(self._dist_slack)
-            print(res)
+        nb_bus = self.get_nb_active_bus()
 
-        # TODO check how to handle
+        try:
+            with warnings.catch_warnings():
+                # remove the warning if _grid non connex. And it that case load flow as not converged
+                warnings.filterwarnings(
+                    "ignore", category=scipy.sparse.linalg.MatrixRankWarning
+                )
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # # stores the computation time
-        # if "_ppc" in self._grid:
-        #     if "et" in self._grid["_ppc"]:
-        #         self.comp_time += self._grid["_ppc"]["et"]
-        # if self._grid.res_gen.isnull().values.any():
-        #     # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
-        #     # sometimes pandapower does not detect divergence and put Nan.
-        #     raise pdp.powerflow.LoadflowNotConverged("Divergence due to Nan values in res_gen table.")
+                # TODO see if there is a way of initialazing the calculus of the solver
 
-        (
-            self.prod_p[:],
-            self.prod_q[:],
-            self.prod_v[:],
-            self.gen_theta[:],
-        ) = self._gens_info()
-        (
-            self.load_p[:],
-            self.load_q[:],
-            self.load_v[:],
-            self.load_theta[:],
-        ) = self._loads_info()
+                # if self._nb_bus_before is None:
+                #     self._pf_init = "dc"
+                # elif nb_bus == self._nb_bus_before:
+                #     self._pf_init = "results"
+                # else:
+                #     self._pf_init = "auto"
 
-        # TODO check how to handle
-
-        # if not is_dc:
-        #     if not np.all(np.isfinite(self.load_v)):
-        #         # TODO see if there is a better way here
-        #         # some loads are disconnected: it's a game over case!
-        #         raise pp.powerflow.LoadflowNotConverged("Isolated load")
-        # else:
-        #     # fix voltages magnitude that are always "nan" for dc case
-        #     # self._grid.res_bus["vm_pu"] is always nan when computed in DC
-        #     self.load_v[:] = self.load_pu_to_kv  # TODO
-        #     # need to assign the correct value when a generator is present at the same bus
-        #     # TODO optimize this ugly loop
-        #     for l_id in range(self.n_load):
-        #         if self.load_to_subid[l_id] in self.gen_to_subid:
-        #             ind_gens = np.where(
-        #                 self.gen_to_subid == self.load_to_subid[l_id]
-        #             )[0]
-        #             for g_id in ind_gens:
-        #                 if (
-        #                         self._topo_vect[self.load_pos_topo_vect[l_id]]
-        #                         == self._topo_vect[self.gen_pos_topo_vect[g_id]]
-        #                 ):
-        #                     self.load_v[l_id] = self.prod_v[g_id]
-        #                     break
+                if np.any(~self._grid.get_loads()["connected"]):
+                    # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
+                    raise BackendError("Disconnected load: for now grid2op cannot handle properly"
+                                        " disconnected load. If you want to disconnect one, say it"
+                                        " consumes 0. instead. Please check loads: "
+                                        f"{np.where(~self._grid.get_loads()['connected'])[0]}"
+                                        )
+                if np.any(~self._grid.get_generators()["connected"]):
+                    # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
+                    raise BackendError("Disconnected gen: for now grid2op cannot handle properly"
+                                        " disconnected generators. If you want to disconnect one, say it"
+                                        " produces 0. instead. Please check generators: "
+                                        f"{np.where(~self._grid.get_generators()['connected'])[0]}"
+                                        )
 
 
-        self.p_or[:] = self._aux_get_line_info("p1", "p1", "p1")
-        self.q_or[:] = self._aux_get_line_info("q1", "q1", "q1")
-        self.v_or[:] = self._grid.get_buses()['v_mag'][self._grid.get_branches()['bus1_id'].values].values
-        self.a_or[:] = self._aux_get_line_info("i1", "i1", "i1")
-        self.theta_or[:] = self._grid.get_buses()['v_angle'][self._grid.get_branches()['bus1_id'].values].values
-        self.a_or[~np.isfinite(self.a_or)] = 0.0
-        self.v_or[~np.isfinite(self.v_or)] = 0.0
 
-        self.p_ex[:] = self._aux_get_line_info("p2", "p2", "p2")
-        self.q_ex[:] = self._aux_get_line_info("q2", "q2", "q2")
-        self.v_ex[:] = self._grid.get_buses()['v_mag'][self._grid.get_branches()['bus2_id'].values].values
-        self.a_ex[:] = self._aux_get_line_info("i2", "i2", "i2")
-        self.theta_ex[:] = self._grid.get_buses()['v_angle'][self._grid.get_branches()['bus2_id'].values].values
-        self.a_ex[~np.isfinite(self.a_ex)] = 0.0
-        self.v_ex[~np.isfinite(self.v_ex)] = 0.0
 
-        #TODO check the lines below to integrate them properly
 
-        # # it seems that pandapower does not take into account disconencted powerline for their voltage
-        # self.v_or[~self.line_status] = 0.0
-        # self.v_ex[~self.line_status] = 0.0
-        # self.v_or[:] *= self.lines_or_pu_to_kv
-        # self.v_ex[:] *= self.lines_ex_pu_to_kv
 
-        # # see issue https://github.com/rte-france/Grid2Op/issues/389
-        # self.theta_or[~np.isfinite(self.theta_or)] = 0.0
-        # self.theta_ex[~np.isfinite(self.theta_ex)] = 0.0
-        #
-        # self._nb_bus_before = None
-        # self._grid._ppc["gen"][self._iref_slack, 1] = 0.0
-        #
-        # # handle storage units
-        # # note that we have to look ourselves for disconnected storage
-        # (
-        #     self.storage_p[:],
-        #     self.storage_q[:],
-        #     self.storage_v[:],
-        #     self.storage_theta[:],
-        # ) = self._storages_info()
-        # deact_storage = ~np.isfinite(self.storage_v)
-        # if np.any(np.abs(self.storage_p[deact_storage]) > self.tol):
-        #     raise pp.powerflow.LoadflowNotConverged(
-        #         "Isolated storage set to absorb / produce something"
-        #     )
-        # self.storage_p[deact_storage] = 0.0
-        # self.storage_q[deact_storage] = 0.0
-        # self.storage_v[deact_storage] = 0.0
-        # self._grid.storage["in_service"].values[deact_storage] = False
+                if is_dc:
+                    res = ppow.loadflow.run_dc(self._grid, parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
+                else:
+                    res = ppow.loadflow.run_ac(self._grid, parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
+                    print(self._dist_slack)
+                    print(res)
 
-        self.line_status[:] = self._get_line_status()
-        self._topo_vect[:] = self._get_topo_vect()
+                # TODO check how to handle
 
-        if res[0].status == pow._pypowsybl.LoadFlowComponentStatus.FAILED:
-            return False
-        else:
-            return True
+                # # stores the computation time
+                # if "_ppc" in self._grid:
+                #     if "et" in self._grid["_ppc"]:
+                #         self.comp_time += self._grid["_ppc"]["et"]
+                # if self._grid.res_gen.isnull().values.any():
+                #     # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
+                #     # sometimes pandapower does not detect divergence and put Nan.
+                #     raise pdp.powerflow.LoadflowNotConverged("Divergence due to Nan values in res_gen table.")
+
+                (
+                    self.prod_p[:],
+                    self.prod_q[:],
+                    self.prod_v[:],
+                    self.gen_theta[:],
+                ) = self._gens_info()
+                (
+                    self.load_p[:],
+                    self.load_q[:],
+                    self.load_v[:],
+                    self.load_theta[:],
+                ) = self._loads_info()
+
+                # TODO check how to handle
+
+                # if not is_dc:
+                #     if not np.all(np.isfinite(self.load_v)):
+                #         # TODO see if there is a better way here
+                #         # some loads are disconnected: it's a game over case!
+                #         raise pp.powerflow.LoadflowNotConverged("Isolated load")
+                # else:
+                #     # fix voltages magnitude that are always "nan" for dc case
+                #     # self._grid.res_bus["vm_pu"] is always nan when computed in DC
+                #     self.load_v[:] = self.load_pu_to_kv  # TODO
+                #     # need to assign the correct value when a generator is present at the same bus
+                #     # TODO optimize this ugly loop
+                #     for l_id in range(self.n_load):
+                #         if self.load_to_subid[l_id] in self.gen_to_subid:
+                #             ind_gens = np.where(
+                #                 self.gen_to_subid == self.load_to_subid[l_id]
+                #             )[0]
+                #             for g_id in ind_gens:
+                #                 if (
+                #                         self._topo_vect[self.load_pos_topo_vect[l_id]]
+                #                         == self._topo_vect[self.gen_pos_topo_vect[g_id]]
+                #                 ):
+                #                     self.load_v[l_id] = self.prod_v[g_id]
+                #                     break
+
+
+                self.p_or[:] = self._aux_get_line_info("p1", "p1", "p1")
+                self.q_or[:] = self._aux_get_line_info("q1", "q1", "q1")
+                self.v_or[:] = self._grid.get_buses()['v_mag'][self._grid.get_branches()['bus1_id'].values].values
+                self.a_or[:] = self._aux_get_line_info("i1", "i1", "i1")
+                self.theta_or[:] = self._grid.get_buses()['v_angle'][self._grid.get_branches()['bus1_id'].values].values
+                self.a_or[~np.isfinite(self.a_or)] = 0.0
+                self.v_or[~np.isfinite(self.v_or)] = 0.0
+
+                self.p_ex[:] = self._aux_get_line_info("p2", "p2", "p2")
+                self.q_ex[:] = self._aux_get_line_info("q2", "q2", "q2")
+                self.v_ex[:] = self._grid.get_buses()['v_mag'][self._grid.get_branches()['bus2_id'].values].values
+                self.a_ex[:] = self._aux_get_line_info("i2", "i2", "i2")
+                self.theta_ex[:] = self._grid.get_buses()['v_angle'][self._grid.get_branches()['bus2_id'].values].values
+                self.a_ex[~np.isfinite(self.a_ex)] = 0.0
+                self.v_ex[~np.isfinite(self.v_ex)] = 0.0
+
+                #TODO check the lines below to integrate them properly
+
+                # # it seems that pandapower does not take into account disconencted powerline for their voltage
+                # self.v_or[~self.line_status] = 0.0
+                # self.v_ex[~self.line_status] = 0.0
+                # self.v_or[:] *= self.lines_or_pu_to_kv
+                # self.v_ex[:] *= self.lines_ex_pu_to_kv
+
+                # # see issue https://github.com/rte-france/Grid2Op/issues/389
+                # self.theta_or[~np.isfinite(self.theta_or)] = 0.0
+                # self.theta_ex[~np.isfinite(self.theta_ex)] = 0.0
+                #
+                # self._nb_bus_before = None
+                # self._grid._ppc["gen"][self._iref_slack, 1] = 0.0
+                #
+                # handle storage units
+                # note that we have to look ourselves for disconnected storage
+                (
+                    self.storage_p[:],
+                    self.storage_q[:],
+                    self.storage_v[:],
+                    self.storage_theta[:],
+                ) = self._storages_info()
+                deact_storage = ~np.isfinite(self.storage_v)
+                if np.any(np.abs(self.storage_p[deact_storage]) > self.tol):
+                    raise BackendError(
+                        "Isolated storage set to absorb / produce something"
+                    )
+                self.storage_p[deact_storage] = 0.0
+                self.storage_q[deact_storage] = 0.0
+                self.storage_v[deact_storage] = 0.0
+                self._grid.get_batteries()["connected"].values[deact_storage] = False
+
+                self.line_status[:] = self._get_line_status()
+                self._topo_vect[:] = self._get_topo_vect()
+
+                if res[0].status == ppow._pypowsybl.LoadFlowComponentStatus.FAILED:
+                    return False
+                else:
+                    return True
+
+        except BackendError as exc_:
+            # of the powerflow has not converged, results are Nan
+            self._reset_all_nan()
+            msg = exc_.__str__()
+            return False, DivergingPowerFlow(f'powerflow diverged with error :"{msg}"')
 
     def get_line_status(self):
         """
@@ -524,7 +599,52 @@ class PowsyblBackend(Backend):
                 1 if self.map_sub[bus_id] == self.load_to_subid[i] else 2
             )
             i += 1
+
+
+        if self.n_storage:
+            # storage can be deactivated by the environment for backward compatibility
+            i = 0
+            for bus_id in self._grid.get_batteries()["bus_id"].values:
+                status = self._grid.get_batteries()["connected"].values[i]
+                if status:
+                    res[self.storage_pos_topo_vect[i]] = (
+                        1 if self.map_sub[bus_id] == self.storage_to_subid[i] else 2
+                    )
+                else:
+                    res[self.storage_pos_topo_vect[i]] = -1
+                i += 1
+
         return res
+
+    def storages_info(self):
+        return (
+                self.storage_p,
+                self.storage_q,
+                self.storage_v,
+        )
+
+    def _storages_info(self):
+        if self.n_storage:
+            # this is because we support "backward comaptibility" feature. So the storage can be
+            # deactivated from the Environment...
+            p_storage = self._grid.get_batteries()["p"].values.astype(dt_float)
+            q_storage = self._grid.get_batteries()["q"].values.astype(dt_float)
+            v_storage = self._grid.get_buses()['v_mag'][self._grid.get_batteries()['bus_id']].values.astype(dt_float)
+            theta_storage = self._grid.get_buses()['v_angle'][self._grid.get_batteries()['bus_id']].values.astype(dt_float)
+
+        else:
+            p_storage = np.zeros(shape=0, dtype=dt_float)
+            q_storage = np.zeros(shape=0, dtype=dt_float)
+            v_storage = np.zeros(shape=0, dtype=dt_float)
+            theta_storage = np.zeros(shape=0, dtype=dt_float)
+        return p_storage, q_storage, v_storage, theta_storage
+
+    def generators_info(self):
+        return (
+            self.prod_p,
+            self.prod_q,
+            self.prod_v,
+        )
 
     def _gens_info(self):
         prod_p = self._grid.get_generators()["p"].values.astype(dt_float)
@@ -548,6 +668,12 @@ class PowsyblBackend(Backend):
         #         ]
 
         return prod_p, prod_q, prod_v, prod_theta
+    def loads_info(self):
+        return (
+            self.load_p,
+            self.load_q,
+            self.load_v
+        )
 
     def _loads_info(self):
         load_p = self._grid.get_loads()["p"].values.astype(dt_float)
@@ -555,20 +681,6 @@ class PowsyblBackend(Backend):
         load_v = self._grid.get_buses()['v_mag'][self._grid.get_loads()['bus_id'].values].values.astype(dt_float)
         load_theta = self._grid.get_buses()['v_angle'][self._grid.get_loads()['bus_id'].values].values.astype(dt_float)
         return load_p, load_q, load_v, load_theta
-
-    def generators_info(self):
-        return (
-            self.prod_p,
-            self.prod_q,
-            self.prod_v,
-        )
-
-    def loads_info(self):
-        return (
-            self.load_p,
-            self.load_q,
-            self.load_v
-        )
 
     def lines_or_info(self):
         return(
@@ -622,5 +734,32 @@ class PowsyblBackend(Backend):
             print(bus_id - self._number_true_line)
             return bus_id - self._number_true_line
         return bus_id
+
+    def _reset_all_nan(self):
+        self.p_or[:] = np.NaN
+        self.q_or[:] = np.NaN
+        self.v_or[:] = np.NaN
+        self.a_or[:] = np.NaN
+        self.p_ex[:] = np.NaN
+        self.q_ex[:] = np.NaN
+        self.v_ex[:] = np.NaN
+        self.a_ex[:] = np.NaN
+        self.prod_p[:] = np.NaN
+        self.prod_q[:] = np.NaN
+        self.prod_v[:] = np.NaN
+        self.load_p[:] = np.NaN
+        self.load_q[:] = np.NaN
+        self.load_v[:] = np.NaN
+        self.storage_p[:] = np.NaN
+        self.storage_q[:] = np.NaN
+        self.storage_v[:] = np.NaN
+        self._nb_bus_before = None
+
+        self.theta_or[:] = np.NaN
+        self.theta_ex[:] = np.NaN
+        self.load_theta[:] = np.NaN
+        self.gen_theta[:] = np.NaN
+        self.storage_theta[:] = np.NaN
+
 
 
