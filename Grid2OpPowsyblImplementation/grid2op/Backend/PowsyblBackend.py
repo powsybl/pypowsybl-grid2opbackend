@@ -306,7 +306,10 @@ class PowsyblBackend(Backend):
 
 
         #TODO find thermal limitation in matpower import because this is only a hack
-        self.thermal_limit_a = np.array([1000000]*len(self.line_or_to_subid))
+        # if self._grid.get_operational_limits().empty==True: # I have to set up some so I decide to put huge one
+        #     self.thermal_limit_a = np.array([1000000]*len(self.line_or_to_subid))
+        # else :
+
         # self.thermal_limit_a = self.thermal_limit_a.astype(dt_float)
 
         self.line_status[:] = self._get_line_status()
