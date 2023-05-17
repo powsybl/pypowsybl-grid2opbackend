@@ -306,11 +306,9 @@ class PowsyblBackend(Backend):
 
 
         #TODO find thermal limitation in matpower import because this is only a hack
-        # if self._grid.get_operational_limits().empty==True: # I have to set up some so I decide to put huge one
-        #     self.thermal_limit_a = np.array([1000000]*len(self.line_or_to_subid))
-        # else :
 
-        # self.thermal_limit_a = self.thermal_limit_a.astype(dt_float)
+        self.thermal_limit_a = np.array([1000000]*len(self.line_or_to_subid))
+        self.thermal_limit_a = self.thermal_limit_a.astype(dt_float)
 
         self.line_status[:] = self._get_line_status()
         self._topo_vect = self._get_topo_vect()
@@ -320,8 +318,96 @@ class PowsyblBackend(Backend):
     def storage_deact_for_backward_comaptibility(self):
         self._init_private_attrs()
 
-    def apply_action(self, action):
-        pass
+    def apply_action(self, backendAction=None):
+        if backendAction is None:
+            return
+        cls = type(self)
+
+        (
+            active_bus,
+            (prod_p, prod_v, load_p, load_q, storage),
+            topo__,
+            shunts__,
+        ) = backendAction()
+
+        # handle bus status
+        bus_is = self._grid.bus["in_service"]
+        for i, (bus1_status, bus2_status) in enumerate(active_bus):
+            bus_is[i] = bus1_status  # no iloc for bus, don't ask me why please :-/
+            bus_is[i + self.__nb_bus_before] = bus2_status
+
+        tmp_prod_p = self._get_vector_inj["prod_p"](self._grid)
+        if np.any(prod_p.changed):
+            tmp_prod_p.iloc[prod_p.changed] = prod_p.values[prod_p.changed]
+
+        tmp_prod_v = self._get_vector_inj["prod_v"](self._grid)
+        if np.any(prod_v.changed):
+            tmp_prod_v.iloc[prod_v.changed] = (
+                    prod_v.values[prod_v.changed] / self.prod_pu_to_kv[prod_v.changed]
+            )
+
+        if self._id_bus_added is not None and prod_v.changed[self._id_bus_added]:
+            # handling of the slack bus, where "2" generators are present.
+            self._grid["ext_grid"]["vm_pu"] = 1.0 * tmp_prod_v[self._id_bus_added]
+
+        tmp_load_p = self._get_vector_inj["load_p"](self._grid)
+        if np.any(load_p.changed):
+            tmp_load_p.iloc[load_p.changed] = load_p.values[load_p.changed]
+
+        tmp_load_q = self._get_vector_inj["load_q"](self._grid)
+        if np.any(load_q.changed):
+            tmp_load_q.iloc[load_q.changed] = load_q.values[load_q.changed]
+
+        if self.n_storage > 0:
+            # active setpoint
+            tmp_stor_p = self._grid.storage["p_mw"]
+            if np.any(storage.changed):
+                tmp_stor_p.iloc[storage.changed] = storage.values[storage.changed]
+
+            # topology of the storage
+            stor_bus = backendAction.get_storages_bus()
+            new_bus_id = stor_bus.values[stor_bus.changed]  # id of the busbar 1 or 2 if
+            activated = new_bus_id > 0  # mask of storage that have been activated
+            new_bus_num = (
+                    self.storage_to_subid[stor_bus.changed] + (new_bus_id - 1) * self.n_sub
+            )  # bus number
+            new_bus_num[~activated] = self.storage_to_subid[stor_bus.changed][
+                ~activated
+            ]
+            self._grid.storage["in_service"].values[stor_bus.changed] = activated
+            self._grid.storage["bus"].values[stor_bus.changed] = new_bus_num
+            self._topo_vect[self.storage_pos_topo_vect[stor_bus.changed]] = new_bus_num
+            self._topo_vect[
+                self.storage_pos_topo_vect[stor_bus.changed][~activated]
+            ] = -1
+
+        if type(backendAction).shunts_data_available:
+            shunt_p, shunt_q, shunt_bus = shunts__
+
+            if np.any(shunt_p.changed):
+                self._grid.shunt["p_mw"].iloc[shunt_p.changed] = shunt_p.values[
+                    shunt_p.changed
+                ]
+            if np.any(shunt_q.changed):
+                self._grid.shunt["q_mvar"].iloc[shunt_q.changed] = shunt_q.values[
+                    shunt_q.changed
+                ]
+            if np.any(shunt_bus.changed):
+                sh_service = shunt_bus.values[shunt_bus.changed] != -1
+                self._grid.shunt["in_service"].iloc[shunt_bus.changed] = sh_service
+                chg_and_in_service = sh_service & shunt_bus.changed
+                self._grid.shunt["bus"].loc[chg_and_in_service] = cls.local_bus_to_global(
+                    shunt_bus.values[chg_and_in_service],
+                    cls.shunt_to_subid[chg_and_in_service])
+
+        # i made at least a real change, so i implement it in the backend
+        for id_el, new_bus in topo__:
+            id_el_backend, id_topo, type_obj = self._big_topo_to_backend[id_el]
+
+            if type_obj is not None:
+                # storage unit are handled elsewhere
+                self._type_to_bus_set[type_obj](new_bus, id_el_backend, id_topo)
+
 
     def runpf(self, is_dc=False):
         nb_bus = self.get_nb_active_bus()
@@ -734,6 +820,21 @@ class PowsyblBackend(Backend):
             print(bus_id - self._number_true_line)
             return bus_id - self._number_true_line
         return bus_id
+
+    def get_nb_active_bus(self):
+        """
+        INTERNAL
+
+        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
+
+        Compute the amount of buses "in service" eg with at least a powerline connected to it.
+
+        Returns
+        -------
+        res: :class:`int`
+            The total number of active buses.
+        """
+        return len(self._grid.get_buses())
 
     def _reset_all_nan(self):
         self.p_or[:] = np.NaN
