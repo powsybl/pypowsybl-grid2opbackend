@@ -119,63 +119,53 @@ class BaseTestLoadingCase(MakeBackend):
         assert backend.n_load == 11
         assert backend.n_sub == 14
 
-        name_line = ['LINE-1-2',
-                     'LINE-1-5',
-                     'LINE-2-3',
-                     'LINE-2-4',
-                     'LINE-2-5',
-                     'LINE-3-4',
-                     'LINE-4-5',
-                     'LINE-6-11',
-                     'LINE-6-12',
-                     'LINE-6-13',
-                     'LINE-9-10',
-                     'LINE-9-14',
-                     'LINE-10-11',
-                     'LINE-12-13',
-                     'LINE-13-14',
-                     'LINE-7-8',
-                     'LINE-9-7',
-                     'TWT-4-7',
-                     'TWT-4-9',
-                     'TWT-5-6']
+        name_line = ['L1-2-1',
+                     'L1-5-1',
+                     'L2-3-1',
+                     'L2-4-1',
+                     'L2-5-1',
+                     'L3-4-1',
+                     'L4-5-1',
+                     'L6-11-1',
+                     'L6-12-1',
+                     'L6-13-1',
+                     'L7-8-1',
+                     'L7-9-1',
+                     'L9-10-1',
+                     'L9-14-1',
+                     'L10-11-1',
+                     'L12-13-1',
+                     'L13-14-1',
+                     'T4-7-1',
+                     'T4-9-1',
+                     'T5-6-1']
         name_line = np.array(name_line)
+
         assert np.all(sorted(backend.name_line) == sorted(name_line))
 
-        name_sub = ['sub_VL-1_0',
-                    'sub_VL-2_0',
-                    'sub_VL-3_0',
-                    'sub_VL-4_0',
-                    'sub_VL-5_0',
-                    'sub_VL-6_0',
-                    'sub_VL-7_0',
-                    'sub_VL-8_0',
-                    'sub_VL-9_0',
-                    'sub_VL-10_0',
-                    'sub_VL-11_0',
-                    'sub_VL-12_0',
-                    'sub_VL-13_0',
-                    'sub_VL-14_0']
+        name_sub = ['sub_B1',
+                    'sub_B2',
+                    'sub_B3',
+                    'sub_B4',
+                    'sub_B7',
+                    'sub_B9',
+                    'sub_B5',
+                    'sub_B6',
+                    'sub_B8',
+                    'sub_B10',
+                    'sub_B11',
+                    'sub_B12',
+                    'sub_B13',
+                    'sub_B14']
         name_sub = np.array(name_sub)
-
         assert np.all(sorted(backend.name_sub) == sorted(name_sub))
 
-        name_gen = ['GEN-1','GEN-2','GEN-3','GEN-6','GEN-8']
+        name_gen = ['B1-G', 'B2-G', 'B3-G', 'B6-G', 'B8-G']
         name_gen = np.array(name_gen)
 
         assert np.all(sorted(backend.name_gen) == sorted(name_gen))
 
-        name_load = ['LOAD-2',
-                     'LOAD-3',
-                     'LOAD-4',
-                     'LOAD-5',
-                     'LOAD-6',
-                     'LOAD-9',
-                     'LOAD-10',
-                     'LOAD-11',
-                     'LOAD-12',
-                     'LOAD-13',
-                     'LOAD-14']
+        name_load = ['B2-L', 'B3-L', 'B4-L', 'B9-L', 'B5-L', 'B6-L', 'B10-L', 'B11-L', 'B12-L', 'B13-L', 'B14-L']
         name_load = np.array(name_load)
         assert np.all(sorted(backend.name_load) == sorted(name_load))
 
