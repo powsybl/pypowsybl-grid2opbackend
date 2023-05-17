@@ -94,6 +94,16 @@ class PowsyblBackend(Backend):
 
         self._get_vector_inj = None
 
+        # Mapping some fun to apply bus updates
+        self._type_to_bus_set = [
+            self._apply_load_bus,
+            self._apply_gen_bus,
+            self._apply_lor_bus,
+            self._apply_trafo_hv,
+            self._apply_lex_bus,
+            self._apply_trafo_lv,
+        ]
+
         self.dim_topo = -1
         self._number_true_line = -1
 
@@ -177,7 +187,6 @@ class PowsyblBackend(Backend):
                                   self._grid.get_2_windings_transformers()["name"].index.to_list()+
                                   self._grid.get_3_windings_transformers()["name"].index.to_list())
         self.name_sub = np.array(["sub_{}".format(i) for i in self._pypowsbyl_bus_name_utility_fct(self._grid)])
-        print(self.name_sub)
 
         if self.n_storage == 0:
             self.set_no_storage() #deactivate storage in grid objects
@@ -286,16 +295,16 @@ class PowsyblBackend(Backend):
         self._get_vector_inj = {}
         self._get_vector_inj[
             "load_p"
-        ] = self._load_grid_load_p_mw  # lambda grid: grid.load["p_mw"]
+        ] = self._load_grid_load_p_mw
         self._get_vector_inj[
             "load_q"
-        ] = self._load_grid_load_q_mvar  # lambda grid: grid.load["q_mvar"]
+        ] = self._load_grid_load_q_mvar
         self._get_vector_inj[
             "prod_p"
-        ] = self._load_grid_gen_p_mw  # lambda grid: grid.gen["p_mw"]
+        ] = self._load_grid_gen_p_mw
         self._get_vector_inj[
             "prod_v"
-        ] = self._load_grid_gen_vm_pu  # lambda grid: grid.gen["vm_pu"]
+        ] = self._load_grid_gen_vm
 
         self.p_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
         self.q_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
@@ -355,12 +364,11 @@ class PowsyblBackend(Backend):
             shunts__,
         ) = backendAction()
 
-        print(active_bus)
-        print((prod_p, prod_v, load_p, load_q, storage))
-
+        # print((prod_p.values, prod_v.values, load_p.values, load_q.values))
+        # print((prod_p.changed, prod_v.changed, load_p.changed, load_q.changed))
 
         #TODO Normally we don't have to handle this for the backend because inactive buses will not appear in
-        # get_buses() fct
+        # get_buses() fct for pypowsybl
 
         # handle bus status
         # bus_is = self._grid.get_buses()
@@ -375,7 +383,7 @@ class PowsyblBackend(Backend):
         tmp_prod_v = self._get_vector_inj["prod_v"](self._grid)
         if np.any(prod_v.changed):
             tmp_prod_v.iloc[prod_v.changed] = (
-                    prod_v.values[prod_v.changed] / self.prod_pu_to_kv[prod_v.changed]
+                    prod_v.values[prod_v.changed] # / self.prod_pu_to_kv[prod_v.changed]
             )
 
         if self._id_bus_added is not None and prod_v.changed[self._id_bus_added]:
@@ -413,24 +421,26 @@ class PowsyblBackend(Backend):
                 self.storage_pos_topo_vect[stor_bus.changed][~activated]
             ] = -1
 
-        if type(backendAction).shunts_data_available:
-            shunt_p, shunt_q, shunt_bus = shunts__
+        #TODO handle shunts
 
-            if np.any(shunt_p.changed):
-                self._grid.shunt["p_mw"].iloc[shunt_p.changed] = shunt_p.values[
-                    shunt_p.changed
-                ]
-            if np.any(shunt_q.changed):
-                self._grid.shunt["q_mvar"].iloc[shunt_q.changed] = shunt_q.values[
-                    shunt_q.changed
-                ]
-            if np.any(shunt_bus.changed):
-                sh_service = shunt_bus.values[shunt_bus.changed] != -1
-                self._grid.shunt["in_service"].iloc[shunt_bus.changed] = sh_service
-                chg_and_in_service = sh_service & shunt_bus.changed
-                self._grid.shunt["bus"].loc[chg_and_in_service] = cls.local_bus_to_global(
-                    shunt_bus.values[chg_and_in_service],
-                    cls.shunt_to_subid[chg_and_in_service])
+        # if type(backendAction).shunts_data_available:
+        #     shunt_p, shunt_q, shunt_bus = shunts__
+        #
+        #     if np.any(shunt_p.changed):
+        #         self._grid.shunt["p_mw"].iloc[shunt_p.changed] = shunt_p.values[
+        #             shunt_p.changed
+        #         ]
+        #     if np.any(shunt_q.changed):
+        #         self._grid.shunt["q_mvar"].iloc[shunt_q.changed] = shunt_q.values[
+        #             shunt_q.changed
+        #         ]
+        #     if np.any(shunt_bus.changed):
+        #         sh_service = shunt_bus.values[shunt_bus.changed] != -1
+        #         self._grid.shunt["in_service"].iloc[shunt_bus.changed] = sh_service
+        #         chg_and_in_service = sh_service & shunt_bus.changed
+        #         self._grid.shunt["bus"].loc[chg_and_in_service] = cls.local_bus_to_global(
+        #             shunt_bus.values[chg_and_in_service],
+        #             cls.shunt_to_subid[chg_and_in_service])
 
         # i made at least a real change, so i implement it in the backend
         for id_el, new_bus in topo__:
@@ -440,6 +450,52 @@ class PowsyblBackend(Backend):
                 # storage unit are handled elsewhere
                 self._type_to_bus_set[type_obj](new_bus, id_el_backend, id_topo)
 
+    def _apply_load_bus(self, new_bus, id_el_backend, id_topo):
+        new_bus_backend = type(self).local_bus_to_global_int(
+            new_bus, self._init_bus_load[id_el_backend]
+        )
+        if new_bus_backend >= 0:
+            self._grid.load["bus"].iat[id_el_backend] = new_bus_backend
+            self._grid.load["in_service"].iat[id_el_backend] = True
+        else:
+            self._grid.load["in_service"].iat[id_el_backend] = False
+            self._grid.load["bus"].iat[id_el_backend] = -1
+
+    def _apply_gen_bus(self, new_bus, id_el_backend, id_topo):
+        new_bus_backend = type(self).local_bus_to_global_int(
+            new_bus, self._init_bus_gen[id_el_backend]
+        )
+        if new_bus_backend >= 0:
+            self._grid.gen["bus"].iat[id_el_backend] = new_bus_backend
+            self._grid.gen["in_service"].iat[id_el_backend] = True
+            # remember in this case slack bus is actually 2 generators for pandapower !
+            if (
+                id_el_backend == (self._grid.gen.shape[0] - 1)
+                and self._iref_slack is not None
+            ):
+                self._grid.ext_grid["bus"].iat[0] = new_bus_backend
+        else:
+            self._grid.gen["in_service"].iat[id_el_backend] = False
+            self._grid.gen["bus"].iat[id_el_backend] = -1
+            # in this case the slack bus cannot be disconnected
+
+    def _apply_lor_bus(self, new_bus, id_el_backend, id_topo):
+        new_bus_backend = type(self).local_bus_to_global_int(
+            new_bus, self._init_bus_lor[id_el_backend]
+        )
+        self.change_bus_powerline_or(id_el_backend, new_bus_backend)
+
+    def _apply_lex_bus(self, new_bus, id_el_backend, id_topo):
+        new_bus_backend = type(self).local_bus_to_global_int(
+            new_bus, self._init_bus_lex[id_el_backend]
+        )
+        self.change_bus_powerline_ex(id_el_backend, new_bus_backend)
+
+    def _apply_trafo_hv(self, new_bus, id_el_backend, id_topo):
+        new_bus_backend = type(self).local_bus_to_global_int(
+            new_bus, self._init_bus_lor[id_el_backend]
+        )
+        self.change_bus_trafo_hv(id_topo, new_bus_backend)
 
     def runpf(self, is_dc=False):
         nb_bus = self.get_nb_active_bus()
@@ -908,8 +964,8 @@ class PowsyblBackend(Backend):
         return grid.get_generators()["p"]
 
     @staticmethod
-    def _load_grid_gen_vm_pu(grid):
-        return grid.get_buses()['v_mag'][grid.get_generators()['bus_id']].values.astype(dt_float)
+    def _load_grid_gen_vm(grid):
+        return grid.get_buses()['v_mag'][grid.get_generators()['bus_id']]
 
     def _pypowsbyl_bus_name_utility_fct(self, grid):
         L = []
