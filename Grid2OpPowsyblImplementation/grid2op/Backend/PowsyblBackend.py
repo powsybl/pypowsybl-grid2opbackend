@@ -80,6 +80,8 @@ class PowsyblBackend(Backend):
         self.prod_v = None
         self.line_status = None
 
+        self._nb_bus_before = None
+
         self.theta_or = None
         self.theta_ex = None
         self.load_theta = None
@@ -90,10 +92,14 @@ class PowsyblBackend(Backend):
 
         self._topo_vect = None
 
+        self._get_vector_inj = None
+
         self.dim_topo = -1
         self._number_true_line = -1
 
         self.tol = None
+
+        self.__nb_bus_before = None # number of substation in the powergrid
 
 
 
@@ -135,6 +141,7 @@ class PowsyblBackend(Backend):
             else:
                 raise RuntimeError('This type of file is not handled try a .mat, .xiidm or .json format')
 
+        #TODO to see if we really have to double the bus for grid2op vision
 
         # """
         # We want here to change the network
@@ -169,8 +176,8 @@ class PowsyblBackend(Backend):
         self.name_line = np.array(self._grid.get_lines()["name"].index.to_list()+
                                   self._grid.get_2_windings_transformers()["name"].index.to_list()+
                                   self._grid.get_3_windings_transformers()["name"].index.to_list())
-        self.name_sub = np.array(["sub_{}".format(i) for i in self._grid.get_buses()["name"].index.to_list()])
-
+        self.name_sub = np.array(["sub_{}".format(i) for i in self._pypowsbyl_bus_name_utility_fct(self._grid)])
+        print(self.name_sub)
 
         if self.n_storage == 0:
             self.set_no_storage() #deactivate storage in grid objects
@@ -189,10 +196,13 @@ class PowsyblBackend(Backend):
         self._init_private_attrs()
 
         # print(self._grid.get_lines()["name"].index.to_list())
-
+        self.__nb_bus_before = self._grid.get_buses().shape[0]
+        self.__nb_powerline = self._grid.get_lines().shape[0]
 
         # and finish the initialization with a call to this function
         self._compute_pos_big_topo()
+
+        self._double_buses()
 
     def _init_private_attrs(self):
 
@@ -272,6 +282,21 @@ class PowsyblBackend(Backend):
                 self.storage_to_sub_pos[i] = pos_already_used[self.storage_to_subid[i]]
                 pos_already_used[self.storage_to_subid[i]] += 1
 
+
+        self._get_vector_inj = {}
+        self._get_vector_inj[
+            "load_p"
+        ] = self._load_grid_load_p_mw  # lambda grid: grid.load["p_mw"]
+        self._get_vector_inj[
+            "load_q"
+        ] = self._load_grid_load_q_mvar  # lambda grid: grid.load["q_mvar"]
+        self._get_vector_inj[
+            "prod_p"
+        ] = self._load_grid_gen_p_mw  # lambda grid: grid.gen["p_mw"]
+        self._get_vector_inj[
+            "prod_v"
+        ] = self._load_grid_gen_vm_pu  # lambda grid: grid.gen["vm_pu"]
+
         self.p_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
         self.q_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
         self.v_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
@@ -330,11 +355,18 @@ class PowsyblBackend(Backend):
             shunts__,
         ) = backendAction()
 
+        print(active_bus)
+        print((prod_p, prod_v, load_p, load_q, storage))
+
+
+        #TODO Normally we don't have to handle this for the backend because inactive buses will not appear in
+        # get_buses() fct
+
         # handle bus status
-        bus_is = self._grid.bus["in_service"]
-        for i, (bus1_status, bus2_status) in enumerate(active_bus):
-            bus_is[i] = bus1_status  # no iloc for bus, don't ask me why please :-/
-            bus_is[i + self.__nb_bus_before] = bus2_status
+        # bus_is = self._grid.get_buses()
+        # for i, (bus1_status, bus2_status) in enumerate(active_bus):
+        #     bus_is[i] = bus1_status  # no iloc for bus, don't ask me why please :-/
+        #     bus_is[i + self.__nb_bus_before] = bus2_status
 
         tmp_prod_p = self._get_vector_inj["prod_p"](self._grid)
         if np.any(prod_p.changed):
@@ -454,8 +486,8 @@ class PowsyblBackend(Backend):
                     res = ppow.loadflow.run_dc(self._grid, parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
                 else:
                     res = ppow.loadflow.run_ac(self._grid, parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
-                    print(self._dist_slack)
-                    print(res)
+                    # print(self._dist_slack)
+                    # print(res)
 
                 # TODO check how to handle
 
@@ -863,4 +895,36 @@ class PowsyblBackend(Backend):
         self.storage_theta[:] = np.NaN
 
 
+    @staticmethod
+    def _load_grid_load_p_mw(grid):
+        return grid.get_loads()["p"]
 
+    @staticmethod
+    def _load_grid_load_q_mvar(grid):
+        return grid.get_loads()["q"]
+
+    @staticmethod
+    def _load_grid_gen_p_mw(grid):
+        return grid.get_generators()["p"]
+
+    @staticmethod
+    def _load_grid_gen_vm_pu(grid):
+        return grid.get_buses()['v_mag'][grid.get_generators()['bus_id']].values.astype(dt_float)
+
+    def _pypowsbyl_bus_name_utility_fct(self, grid):
+        L = []
+        for elem in grid.get_voltage_levels().index:
+            for bus_id in grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index:
+                L.append(bus_id)
+        return L
+
+
+    def _double_buses(self):
+        df = self._grid.get_buses()
+        L = []
+        for elem in self._grid.get_voltage_levels().index:
+            for bus_id in self._grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index:
+                L.append(bus_id)
+        L_voltage_id = df['voltage_level_id'].to_list()
+        for i in range(len(L)):
+            self._grid.create_buses(id=L[i] + '_bis', voltage_level_id=L_voltage_id[i], name=df['name'][i])
