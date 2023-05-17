@@ -112,6 +112,25 @@ class TestNames(HelperTests, BaseTestNames):
 #         return "test_case14.xiidm"
 
 
+class TestTopoAction(HelperTests, BaseTestTopoAction):
+    def setUp(self):
+        BaseTestTopoAction.setUp(self)
+
+    def tearDown(self):
+        # TODO find something more elegant
+        BaseTestTopoAction.tearDown(self)
+
+    def make_backend(self, detailed_infos_for_cascading_failures=False):
+        return PowsyblBackend(
+            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+        )
+
+    def get_path(self):
+        return PATH_DATA_TEST_PYPO
+
+    def get_casefile(self):
+        return "test_case14.xiidm"
+
 if __name__ == "__main__":
     unittest.main()
 
