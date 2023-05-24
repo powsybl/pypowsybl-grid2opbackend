@@ -17,7 +17,7 @@ import pandapower as pdp
 import pypowsybl as ppow
 import scipy
 import copy
-import grid2op as grid2op
+
 from grid2op.dtypes import dt_int, dt_float, dt_bool
 from grid2op.Backend.Backend import Backend
 from grid2op.Action import BaseAction
