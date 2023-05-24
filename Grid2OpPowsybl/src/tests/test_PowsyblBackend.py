@@ -12,13 +12,13 @@ import warnings
 import numpy as np
 import os
 from grid2op import make
-
-from grid2op.tests.helper_path_test import PATH_DATA_TEST_PP, PATH_DATA_TEST
-from grid2op.Backend.PowsyblBackend import PowsyblBackend
+from pathlib import Path
+# from grid2op.tests.helper_path_test import PATH_DATA_TEST_PP, PATH_DATA_TEST
+from src.Backend.PowsyblBackend import PowsyblBackend
 
 from grid2op.tests.helper_path_test import HelperTests
-from grid2op.tests.BaseBackendTestPyPowsybl import BaseTestNames
-from grid2op.tests.BaseBackendTestPyPowsybl import BaseTestLoadingCase
+from src.tests.BaseBackendTestPyPowsybl import BaseTestNames
+from src.tests.BaseBackendTestPyPowsybl import BaseTestLoadingCase
 # from grid2op.tests.BaseBackendTest import BaseTestNames
 # from grid2op.tests.BaseBackendTest import BaseTestLoadingCase
 from grid2op.tests.BaseBackendTest import BaseTestLoadingBackendFunc
@@ -33,11 +33,16 @@ from grid2op.tests.BaseBackendTest import BaseIssuesTest
 from grid2op.tests.BaseBackendTest import BaseStatusActions
 from grid2op.tests.BaseBackendTest import BaseTestStorageAction
 
-PATH_DATA_TEST_INIT = PATH_DATA_TEST
+test_dir = Path(__file__).parent.absolute()
+implementation_dir = os.fspath(test_dir.parent.absolute())
+data_dir = os.path.abspath(os.path.join(implementation_dir, "data_test"))
+PATH_DATA_TEST = data_dir
 
+# PATH_DATA_TEST_INIT =
 
+# PATH_DATA_TEST_PYPO
 
-PATH_DATA_TEST_PYPO = os.path.abspath(os.path.join(PATH_DATA_TEST_INIT, "test_Powsybl"))
+# PATH_DATA_TEST_PYPO = os.path.abspath(os.path.join(PATH_DATA_TEST_INIT, "test_Powsybl"))
 
 
 import warnings
@@ -52,7 +57,7 @@ class TestLoadingCase(HelperTests, BaseTestLoadingCase):
         )
 
     def get_path(self):
-        return PATH_DATA_TEST_PYPO
+        return PATH_DATA_TEST
 
     def get_casefile(self):
         return "test_case14.xiidm"#"case14_realistic_test.mat"
@@ -76,7 +81,7 @@ class TestNames(HelperTests, BaseTestNames):
         )
 
     def get_path(self):
-        return PATH_DATA_TEST_INIT
+        return PATH_DATA_TEST
 
 # class TestLoadingCase(HelperTests, BaseTestLoadingCase):
 #     def make_backend(self, detailed_infos_for_cascading_failures=False):
@@ -126,7 +131,7 @@ class TestTopoAction(HelperTests, BaseTestTopoAction):
         )
 
     def get_path(self):
-        return PATH_DATA_TEST_PYPO
+        return PATH_DATA_TEST
 
     def get_casefile(self):
         return "test_case14.xiidm"

@@ -101,7 +101,7 @@ class PowsyblBackend(Backend):
             self._apply_lor_bus,
             self._apply_trafo_hv,
             self._apply_lex_bus,
-            self._apply_trafo_lv,
+            # self._apply_trafo_lv,
         ]
 
         self.dim_topo = -1
