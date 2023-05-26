@@ -1,0 +1,11 @@
+{
+    "agent_seed": null,
+    "backend_type": "PandaPowerBackend_rte_case14_realistic",
+    "chronics_max_timestep": "5",
+    "chronics_path": "C:\\Users\\rtschupp\\AppData\\Local\\pypoetry\\Cache\\virtualenvs\\pypowsybltest-3L0u-b9v-py3.10\\lib\\site-packages\\grid2op\\data\\rte_case14_realistic\\chronics\\000",
+    "cumulative_reward": 454.87359619140625,
+    "env_seed": null,
+    "env_type": "Environment_rte_case14_realistic",
+    "grid_path": "C:\\Users\\rtschupp\\AppData\\Local\\pypoetry\\Cache\\virtualenvs\\pypowsybltest-3L0u-b9v-py3.10\\lib\\site-packages\\grid2op\\data\\rte_case14_realistic\\grid.json",
+    "nb_timestep_played": 5
+}
