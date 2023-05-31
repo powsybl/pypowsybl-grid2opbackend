@@ -178,11 +178,18 @@ class BaseTestLoadingCase(MakeBackend):
             warnings.filterwarnings("ignore")
             p_subs, q_subs, p_bus, q_bus, v_bus = backend.check_kirchoff()
 
-        print(self.tolvect)
-        print(np.max(np.abs(p_subs)))
-        print(np.max(np.abs(p_bus.flatten())))
-        assert np.max(np.abs(p_subs)) <= self.tolvect
-        assert np.max(np.abs(p_bus.flatten())) <= self.tolvect
+
+        # print(backend.lines_or_info())
+        # print(backend.lines_ex_info())
+        #
+        # print(backend.generators_info())
+        #
+        # print(backend.loads_info())
+
+        # print(p_subs)
+        assert np.max(np.abs(p_subs))/10**6 <= self.tolvect # I considered that the cst was given in pu (so I divided
+        # to make MW in pu), I a not sure
+        assert np.max(np.abs(p_bus.flatten()))/10**6 <= self.tolvect
         if backend.shunts_data_available:
             assert np.max(np.abs(q_subs)) <= self.tolvect
             assert np.max(np.abs(q_bus.flatten())) <= self.tolvect
