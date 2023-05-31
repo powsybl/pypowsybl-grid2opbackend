@@ -8,7 +8,6 @@
 
 import os  # load the python os default module
 import sys  # laod the python sys default module
-import copy
 import warnings
 import numpy as np
 import pandas as pd
@@ -168,6 +167,15 @@ class PowsyblBackend(Backend):
         #             self._grid,
         #             distributed_slack=self._dist_slack,
         #         )
+
+        # Contrarly to Pandapower i do not have to handle issues with slack buses if the files are xiidm and well written
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            res = ppow.loadflow.run_ac(self._grid, parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
+        if not res[0].slack_bus_id:
+            BackendError("The environment do not have a configured slack_bus, try to add it by hand in the initial data"
+                         "file")
+
 
 
         # and now initialize the attributes (see list bellow)
@@ -386,10 +394,6 @@ class PowsyblBackend(Backend):
                     prod_v.values[prod_v.changed] # / self.prod_pu_to_kv[prod_v.changed]
             )
 
-        if self._id_bus_added is not None and prod_v.changed[self._id_bus_added]:
-            # handling of the slack bus, where "2" generators are present.
-            self._grid["ext_grid"]["vm_pu"] = 1.0 * tmp_prod_v[self._id_bus_added]
-
         tmp_load_p = self._get_vector_inj["load_p"](self._grid)
         if np.any(load_p.changed):
             tmp_load_p.iloc[load_p.changed] = load_p.values[load_p.changed]
@@ -400,9 +404,9 @@ class PowsyblBackend(Backend):
 
         if self.n_storage > 0:
             # active setpoint
-            tmp_stor_p = self._grid.storage["p_mw"]
+            tmp_stor_p = self._grid.get_batteries()["p"].values.astype(dt_float)
             if np.any(storage.changed):
-                tmp_stor_p.iloc[storage.changed] = storage.values[storage.changed]
+                tmp_stor_p[storage.changed] = storage.values[storage.changed]
 
             # topology of the storage
             stor_bus = backendAction.get_storages_bus()
@@ -414,8 +418,8 @@ class PowsyblBackend(Backend):
             new_bus_num[~activated] = self.storage_to_subid[stor_bus.changed][
                 ~activated
             ]
-            self._grid.storage["in_service"].values[stor_bus.changed] = activated
-            self._grid.storage["bus"].values[stor_bus.changed] = new_bus_num
+            self._grid.get_batteries()["connected"].values[stor_bus.changed] = activated
+            self._grid.get_batteries()["bus_id"].values[stor_bus.changed] = new_bus_num
             self._topo_vect[self.storage_pos_topo_vect[stor_bus.changed]] = new_bus_num
             self._topo_vect[
                 self.storage_pos_topo_vect[stor_bus.changed][~activated]
