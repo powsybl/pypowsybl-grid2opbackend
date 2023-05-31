@@ -39,12 +39,6 @@ implementation_dir = os.fspath(test_dir.parent.absolute())
 data_dir = os.path.abspath(os.path.join(implementation_dir, "data_test"))
 PATH_DATA_TEST = data_dir
 
-# PATH_DATA_TEST_INIT =
-
-# PATH_DATA_TEST_PYPO
-
-# PATH_DATA_TEST_PYPO = os.path.abspath(os.path.join(PATH_DATA_TEST_INIT, "test_Powsybl"))
-
 
 import warnings
 
@@ -73,7 +67,7 @@ class TestLoadingCase(HelperTests, BaseTestLoadingCase):
 #         return os.path.join(PATH_DATA_TEST, 'test_PandaPower')
 #
 #     def get_casefile(self):
-#         return "test_case14.json"
+#         return "test_case300.json"
 
 class TestNames(HelperTests, BaseTestNames):
     def make_backend(self, detailed_infos_for_cascading_failures=False):
@@ -94,28 +88,28 @@ class TestNames(HelperTests, BaseTestNames):
 #         return PATH_DATA_TEST_PP
 
 #     def get_casefile(self):
-#         return "test_case14.xiidm"
+#         return "test_case300.xiidm"
 
 
-# class TestLoadingBackendFunc(HelperTests, BaseTestLoadingBackendFunc):
-#     def setUp(self):
-#         # TODO find something more elegant
-#         BaseTestLoadingBackendFunc.setUp(self)
-#
-#     def tearDown(self):
-#         # TODO find something more elegant
-#         BaseTestLoadingBackendFunc.tearDown(self)
-#
-#     def make_backend(self, detailed_infos_for_cascading_failures=False):
-#         return PowsyblBackend(
-#             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
-#         )
-#
-#     def get_path(self):
-#         return PATH_DATA_TEST_PP
-#
-#     def get_casefile(self):
-#         return "test_case14.xiidm"
+class TestLoadingBackendFunc(HelperTests, BaseTestLoadingBackendFunc):
+    def setUp(self):
+        # TODO find something more elegant
+        BaseTestLoadingBackendFunc.setUp(self)
+
+    def tearDown(self):
+        # TODO find something more elegant
+        BaseTestLoadingBackendFunc.tearDown(self)
+
+    def make_backend(self, detailed_infos_for_cascading_failures=False):
+        return PowsyblBackend(
+            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+        )
+
+    def get_path(self):
+        return PATH_DATA_TEST
+
+    def get_casefile(self):
+        return "test_case300.xiidm"
 
 
 class TestTopoAction(HelperTests, BaseTestTopoAction):
@@ -135,7 +129,7 @@ class TestTopoAction(HelperTests, BaseTestTopoAction):
         return PATH_DATA_TEST
 
     def get_casefile(self):
-        return "test_case14.xiidm"
+        return "test_case300.xiidm"
 
 if __name__ == "__main__":
     unittest.main()
