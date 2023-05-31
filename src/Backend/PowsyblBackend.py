@@ -87,11 +87,14 @@ class PowsyblBackend(Backend):
         self.gen_theta = None
         self.storage_theta = None
 
-        self._iref_slack = None
+        # self._iref_slack = None
 
         self._topo_vect = None
 
         self._get_vector_inj = None
+        self._big_topo_to_obj = None
+        self._big_topo_to_backend = None
+        self.__pp_backend_initial_grid = None
 
         # Mapping some fun to apply bus updates
         self._type_to_bus_set = [
@@ -108,11 +111,10 @@ class PowsyblBackend(Backend):
 
         self.tol = None
 
-        self.__nb_bus_before = None # number of substation in the powergrid
-
-
-
-
+        self.__nb_bus_before = None  # number of substation in the powergrid
+        self.__nb_powerline = (
+            None  # number of powerline (real powerline, not transformer)
+        )
     def load_grid(self, path, filename=None):
 
         if path is None and filename is None:
@@ -138,11 +140,13 @@ class PowsyblBackend(Backend):
             warnings.filterwarnings("ignore")
             if full_path.endswith('.json'):
                 pandapow_net = pdp.from_json(full_path)
-                if not pandapow_net.res_bus.shape[0]: #if there is no info on bus initialize with flat values the matpower network
-                    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0]+'.mat', init='flat')
+                if not pandapow_net.res_bus.shape[
+                    0]:  # if there is no info on bus initialize with flat values the matpower network
+                    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat', init='flat')
                 else:
-                    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0]+'.mat')
-                self._grid = ppow.network.load(full_path.split('.')[0]+'.mat', {'matpower.import.ignore-base-voltage': 'false'})
+                    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat')
+                self._grid = ppow.network.load(full_path.split('.')[0] + '.mat',
+                                               {'matpower.import.ignore-base-voltage': 'false'})
             elif full_path.endswith('.mat'):
                 self._grid = ppow.network.load(full_path, {'matpower.import.ignore-base-voltage': 'false'})
             elif full_path.endswith('.xiidm'):
@@ -150,7 +154,7 @@ class PowsyblBackend(Backend):
             else:
                 raise RuntimeError('This type of file is not handled try a .mat, .xiidm or .json format')
 
-        #TODO to see if we really have to double the bus for grid2op vision
+        # TODO to see if we really have to double the bus for grid2op vision
 
         # """
         # We want here to change the network
@@ -171,33 +175,38 @@ class PowsyblBackend(Backend):
         # Contrarly to Pandapower i do not have to handle issues with slack buses if the files are xiidm and well written
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
-            res = ppow.loadflow.run_ac(self._grid, parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
+            res = ppow.loadflow.run_ac(self._grid,
+                                       parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
         if not res[0].slack_bus_id:
             BackendError("The environment do not have a configured slack_bus, try to add it by hand in the initial data"
                          "file")
 
+        self.__nb_powerline = self._grid.get_lines().shape[0]
 
 
         # and now initialize the attributes (see list bellow)
         self.n_line = copy.deepcopy(self._grid.get_lines().shape[0]) + \
-                    copy.deepcopy(self._grid.get_2_windings_transformers().shape[0]) + \
-                    copy.deepcopy(self._grid.get_3_windings_transformers().shape[0]) # we add the transfos because they are not modeled in grid2op
-        self.n_gen = copy.deepcopy(self._grid.get_generators().shape[0])  # number of generators in the grid should be read from self._grid
-        self.n_load = copy.deepcopy(self._grid.get_loads().shape[0])  # number of loads in the grid should be read from self._grid
-        self.n_sub = copy.deepcopy(self._grid.get_buses().shape[0])  # we give as an input the number of buses that seems to be corresponding to substations in Grid2op
+                      copy.deepcopy(self._grid.get_2_windings_transformers().shape[0]) + \
+                      copy.deepcopy(self._grid.get_3_windings_transformers().shape[
+                                        0])  # we add the transfos because they are not modeled in grid2op
+        self.n_gen = copy.deepcopy(
+            self._grid.get_generators().shape[0])  # number of generators in the grid should be read from self._grid
+        self.n_load = copy.deepcopy(
+            self._grid.get_loads().shape[0])  # number of loads in the grid should be read from self._grid
+        self.n_sub = copy.deepcopy(self._grid.get_buses().shape[
+                                       0])  # we give as an input the number of buses that seems to be corresponding to substations in Grid2op
         self.n_storage = copy.deepcopy(self._grid.get_batteries().shape[0])
-
 
         # TODO protection against empty columns
         self.name_load = np.array(self._grid.get_loads()["name"].index.to_list())
         self.name_gen = np.array(self._grid.get_generators()["name"].index.to_list())
-        self.name_line = np.array(self._grid.get_lines()["name"].index.to_list()+
-                                  self._grid.get_2_windings_transformers()["name"].index.to_list()+
+        self.name_line = np.array(self._grid.get_lines()["name"].index.to_list() +
+                                  self._grid.get_2_windings_transformers()["name"].index.to_list() +
                                   self._grid.get_3_windings_transformers()["name"].index.to_list())
         self.name_sub = np.array(["sub_{}".format(i) for i in self._pypowsbyl_bus_name_utility_fct(self._grid)])
 
         if self.n_storage == 0:
-            self.set_no_storage() #deactivate storage in grid objects
+            self.set_no_storage()  # deactivate storage in grid objects
         else:
             self.name_storage = np.array(self._grid.get_batteries()[
                                              "name"].index.to_list())  # By default in powsybl only one type of storage : batteries
@@ -239,14 +248,13 @@ class PowsyblBackend(Backend):
             self.storage_to_subid = np.zeros(self.n_storage, dtype=dt_int)
             self.storage_to_sub_pos = np.zeros(self.n_storage, dtype=dt_int)
 
-        #TODO handle storage and other non classical objects
+        # TODO handle storage and other non classical objects
 
         pos_already_used = np.zeros(self.n_sub, dtype=dt_int)
 
         # Allows us to map the id of each substation in Grid2op (an integer) with the name of each corresponding bus in
         # Pypowsybl
         self.map_sub = {bus: i for i, (bus, row) in enumerate(self._grid.get_buses().iterrows())}
-
 
         # For lines
         self.line_or_to_subid = np.array([self.map_sub[i] for i in self._grid.get_lines()["bus1_id"].to_list()] +
@@ -299,6 +307,8 @@ class PowsyblBackend(Backend):
                 self.storage_to_sub_pos[i] = pos_already_used[self.storage_to_subid[i]]
                 pos_already_used[self.storage_to_subid[i]] += 1
 
+        self.dim_topo = np.sum(self.sub_info)
+        self._compute_pos_big_topo()
 
         self._get_vector_inj = {}
         self._get_vector_inj[
@@ -334,7 +344,64 @@ class PowsyblBackend(Backend):
         self.storage_v = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
         self._nb_bus_before = None
 
-        #TODO check the other lines of code in PandaPowerBackend
+        # TODO check the other lines of code in PandaPowerBackend
+
+        # shunts data
+        self.n_shunt = self._grid.get_shunt_compensators().shape[0]
+        self.shunt_to_subid = np.zeros(self.n_shunt, dtype=dt_int) - 1
+        self.name_shunt = np.array(self._grid.get_shunt_compensators()["name"].index.to_list())
+        self.shunt_to_subid = np.array(
+            [self.map_sub[i] for i in self._grid.get_shunt_compensators()["bus_id"].to_list()])
+        # for i, (_, row) in enumerate(self._grid.get_shunt_compensators().iterrows()):
+        #     bus = int(row["bus"])
+        #     name_shunt.append("shunt_{bus}_{index_shunt}".format(**row, index_shunt=i))
+        #     self.shunt_to_subid[i] = bus
+        # self.name_shunt = np.array(name_shunt)
+        self._sh_vnkv = self._grid.get_buses()['v_mag'][
+            self._grid.get_shunt_compensators()['bus_id'].values].values.astype(
+            dt_float
+        )
+        self.shunts_data_available = True
+
+        # store the topoid -> objid
+        self._big_topo_to_obj = [(None, None) for _ in range(self.dim_topo)]
+        nm_ = "load"
+        for load_id, pos_big_topo in enumerate(self.load_pos_topo_vect):
+            self._big_topo_to_obj[pos_big_topo] = (load_id, nm_)
+        nm_ = "gen"
+        for gen_id, pos_big_topo in enumerate(self.gen_pos_topo_vect):
+            self._big_topo_to_obj[pos_big_topo] = (gen_id, nm_)
+        nm_ = "lineor"
+        for l_id, pos_big_topo in enumerate(self.line_or_pos_topo_vect):
+            self._big_topo_to_obj[pos_big_topo] = (l_id, nm_)
+        nm_ = "lineex"
+        for l_id, pos_big_topo in enumerate(self.line_ex_pos_topo_vect):
+            self._big_topo_to_obj[pos_big_topo] = (l_id, nm_)
+
+        # store the topoid -> objid
+        self._big_topo_to_backend = [(None, None, None) for _ in range(self.dim_topo)]
+        for load_id, pos_big_topo in enumerate(self.load_pos_topo_vect):
+            self._big_topo_to_backend[pos_big_topo] = (load_id, load_id, 0)
+        for gen_id, pos_big_topo in enumerate(self.gen_pos_topo_vect):
+            self._big_topo_to_backend[pos_big_topo] = (gen_id, gen_id, 1)
+        for l_id, pos_big_topo in enumerate(self.line_or_pos_topo_vect):
+            if l_id < self.__nb_powerline:
+                self._big_topo_to_backend[pos_big_topo] = (l_id, l_id, 2)
+            else:
+                self._big_topo_to_backend[pos_big_topo] = (
+                    l_id,
+                    l_id - self.__nb_powerline,
+                    3,
+                )
+        for l_id, pos_big_topo in enumerate(self.line_ex_pos_topo_vect):
+            if l_id < self.__nb_powerline:
+                self._big_topo_to_backend[pos_big_topo] = (l_id, l_id, 4)
+            else:
+                self._big_topo_to_backend[pos_big_topo] = (
+                    l_id,
+                    l_id - self.__nb_powerline,
+                    5,
+                )
 
         self.theta_or = np.full(self.n_line, fill_value=np.NaN, dtype=dt_float)
         self.theta_ex = np.full(self.n_line, fill_value=np.NaN, dtype=dt_float)
@@ -346,10 +413,9 @@ class PowsyblBackend(Backend):
         self.dim_topo = np.sum(self.sub_info)
         self._compute_pos_big_topo()
 
+        # TODO find thermal limitation in matpower import because this is only a hack
 
-        #TODO find thermal limitation in matpower import because this is only a hack
-
-        self.thermal_limit_a = np.array([1000000]*len(self.line_or_to_subid))
+        self.thermal_limit_a = np.array([1000000] * len(self.line_or_to_subid))
         self.thermal_limit_a = self.thermal_limit_a.astype(dt_float)
 
         self.line_status[:] = self._get_line_status()
@@ -375,7 +441,7 @@ class PowsyblBackend(Backend):
         # print((prod_p.values, prod_v.values, load_p.values, load_q.values))
         # print((prod_p.changed, prod_v.changed, load_p.changed, load_q.changed))
 
-        #TODO Normally we don't have to handle this for the backend because inactive buses will not appear in
+        # TODO Normally we don't have to handle this for the backend because inactive buses will not appear in
         # get_buses() fct for pypowsybl
 
         # handle bus status
@@ -391,7 +457,7 @@ class PowsyblBackend(Backend):
         tmp_prod_v = self._get_vector_inj["prod_v"](self._grid)
         if np.any(prod_v.changed):
             tmp_prod_v.iloc[prod_v.changed] = (
-                    prod_v.values[prod_v.changed] # / self.prod_pu_to_kv[prod_v.changed]
+                prod_v.values[prod_v.changed]  # / self.prod_pu_to_kv[prod_v.changed]
             )
 
         tmp_load_p = self._get_vector_inj["load_p"](self._grid)
@@ -425,22 +491,22 @@ class PowsyblBackend(Backend):
                 self.storage_pos_topo_vect[stor_bus.changed][~activated]
             ] = -1
 
-        #TODO handle shunts
+        # TODO handle shunts
 
         # if type(backendAction).shunts_data_available:
         #     shunt_p, shunt_q, shunt_bus = shunts__
         #
         #     if np.any(shunt_p.changed):
-        #         self._grid.shunt["p_mw"].iloc[shunt_p.changed] = shunt_p.values[
+        #         self._grid.get_shunt_compensators()["p"].iloc[shunt_p.changed] = shunt_p.values[
         #             shunt_p.changed
         #         ]
         #     if np.any(shunt_q.changed):
-        #         self._grid.shunt["q_mvar"].iloc[shunt_q.changed] = shunt_q.values[
+        #         self._grid.get_shunt_compensators()["q"].iloc[shunt_q.changed] = shunt_q.values[
         #             shunt_q.changed
         #         ]
         #     if np.any(shunt_bus.changed):
         #         sh_service = shunt_bus.values[shunt_bus.changed] != -1
-        #         self._grid.shunt["in_service"].iloc[shunt_bus.changed] = sh_service
+        #         self._grid.get_shunt_compensators()["connected"].iloc[shunt_bus.changed] = sh_service
         #         chg_and_in_service = sh_service & shunt_bus.changed
         #         self._grid.shunt["bus"].loc[chg_and_in_service] = cls.local_bus_to_global(
         #             shunt_bus.values[chg_and_in_service],
@@ -474,8 +540,8 @@ class PowsyblBackend(Backend):
             self._grid.gen["in_service"].iat[id_el_backend] = True
             # remember in this case slack bus is actually 2 generators for pandapower !
             if (
-                id_el_backend == (self._grid.gen.shape[0] - 1)
-                and self._iref_slack is not None
+                    id_el_backend == (self._grid.gen.shape[0] - 1)
+                    and self._iref_slack is not None
             ):
                 self._grid.ext_grid["bus"].iat[0] = new_bus_backend
         else:
@@ -525,27 +591,24 @@ class PowsyblBackend(Backend):
                 if np.any(~self._grid.get_loads()["connected"]):
                     # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
                     raise BackendError("Disconnected load: for now grid2op cannot handle properly"
-                                        " disconnected load. If you want to disconnect one, say it"
-                                        " consumes 0. instead. Please check loads: "
-                                        f"{np.where(~self._grid.get_loads()['connected'])[0]}"
-                                        )
+                                       " disconnected load. If you want to disconnect one, say it"
+                                       " consumes 0. instead. Please check loads: "
+                                       f"{np.where(~self._grid.get_loads()['connected'])[0]}"
+                                       )
                 if np.any(~self._grid.get_generators()["connected"]):
                     # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
                     raise BackendError("Disconnected gen: for now grid2op cannot handle properly"
-                                        " disconnected generators. If you want to disconnect one, say it"
-                                        " produces 0. instead. Please check generators: "
-                                        f"{np.where(~self._grid.get_generators()['connected'])[0]}"
-                                        )
-
-
-
-
-
+                                       " disconnected generators. If you want to disconnect one, say it"
+                                       " produces 0. instead. Please check generators: "
+                                       f"{np.where(~self._grid.get_generators()['connected'])[0]}"
+                                       )
 
                 if is_dc:
-                    res = ppow.loadflow.run_dc(self._grid, parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
+                    res = ppow.loadflow.run_dc(self._grid,
+                                               parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
                 else:
-                    res = ppow.loadflow.run_ac(self._grid, parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
+                    res = ppow.loadflow.run_ac(self._grid,
+                                               parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
                     # print(self._dist_slack)
                     # print(res)
 
@@ -599,7 +662,6 @@ class PowsyblBackend(Backend):
                 #                     self.load_v[l_id] = self.prod_v[g_id]
                 #                     break
 
-
                 self.p_or[:] = self._aux_get_line_info("p1", "p1", "p1")
                 self.q_or[:] = self._aux_get_line_info("q1", "q1", "q1")
                 self.v_or[:] = self._grid.get_buses()['v_mag'][self._grid.get_branches()['bus1_id'].values].values
@@ -616,7 +678,7 @@ class PowsyblBackend(Backend):
                 self.a_ex[~np.isfinite(self.a_ex)] = 0.0
                 self.v_ex[~np.isfinite(self.v_ex)] = 0.0
 
-                #TODO check the lines below to integrate them properly
+                # TODO check the lines below to integrate them properly
 
                 # # it seems that pandapower does not take into account disconencted powerline for their voltage
                 # self.v_or[~self.line_status] = 0.0
@@ -692,7 +754,7 @@ class PowsyblBackend(Backend):
                 line_connected,
                 transfo_2_connected,
                 transfo_3_connected
-        )
+            )
         ).astype(dt_bool)
 
     def get_topo_vect(self):
@@ -720,7 +782,6 @@ class PowsyblBackend(Backend):
                 res[self.line_ex_pos_topo_vect[i]] = -1
             i += 1
 
-
         nb = self._number_true_line
 
         # For 2 windings transfo
@@ -742,7 +803,6 @@ class PowsyblBackend(Backend):
                 res[self.line_or_pos_topo_vect[j]] = -1
                 res[self.line_ex_pos_topo_vect[j]] = -1
             i += 1
-
 
         # For 3 windings transfo
         i = 0
@@ -778,7 +838,6 @@ class PowsyblBackend(Backend):
             )
             i += 1
 
-
         if self.n_storage:
             # storage can be deactivated by the environment for backward compatibility
             i = 0
@@ -794,11 +853,21 @@ class PowsyblBackend(Backend):
 
         return res
 
+    def shunt_info(self):
+        shunt_p = self._grid.get_shunt_compensators()["p"].values.astype(dt_float)
+        shunt_q = self._grid.get_shunt_compensators()["q"].values.astype(dt_float)
+        shunt_v = self._grid.get_buses()['v_mag'][self._grid.get_shunt_compensators()['bus_id']].values.astype(dt_float)
+        shunt_bus = np.array([self.map_sub[elem] for elem in self._grid.get_shunt_compensators()["bus_id"].values]) < self.__nb_bus_before
+        shunt_bus = 1 * shunt_bus
+        shunt_bus = shunt_bus.astype(dt_int)
+        shunt_v[~self._grid.get_shunt_compensators()["connected"].values] = -1.0
+        shunt_bus[~self._grid.get_shunt_compensators()["connected"].values] = -1
+        return shunt_p, shunt_q, shunt_v, shunt_bus
     def storages_info(self):
         return (
-                self.storage_p,
-                self.storage_q,
-                self.storage_v,
+            self.storage_p,
+            self.storage_q,
+            self.storage_v,
         )
 
     def _storages_info(self):
@@ -808,7 +877,8 @@ class PowsyblBackend(Backend):
             p_storage = self._grid.get_batteries()["p"].values.astype(dt_float)
             q_storage = self._grid.get_batteries()["q"].values.astype(dt_float)
             v_storage = self._grid.get_buses()['v_mag'][self._grid.get_batteries()['bus_id']].values.astype(dt_float)
-            theta_storage = self._grid.get_buses()['v_angle'][self._grid.get_batteries()['bus_id']].values.astype(dt_float)
+            theta_storage = self._grid.get_buses()['v_angle'][self._grid.get_batteries()['bus_id']].values.astype(
+                dt_float)
 
         else:
             p_storage = np.zeros(shape=0, dtype=dt_float)
@@ -830,8 +900,7 @@ class PowsyblBackend(Backend):
         prod_v = self._grid.get_buses()['v_mag'][self._grid.get_generators()['bus_id']].values.astype(dt_float)
         prod_theta = self._grid.get_buses()['v_angle'][self._grid.get_generators()['bus_id']].values.astype(dt_float)
 
-
-        #TODO understand if the same problem occurs in powsybl
+        # TODO understand if the same problem occurs in powsybl
 
         # if self._iref_slack is not None:
         #     # slack bus and added generator are on same bus. I need to add power of slack bus to this one.
@@ -846,6 +915,7 @@ class PowsyblBackend(Backend):
         #         ]
 
         return prod_p, prod_q, prod_v, prod_theta
+
     def loads_info(self):
         return (
             self.load_p,
@@ -861,7 +931,7 @@ class PowsyblBackend(Backend):
         return load_p, load_q, load_v, load_theta
 
     def lines_or_info(self):
-        return(
+        return (
             self.p_or,
             self.q_or,
             self.v_or,
@@ -906,7 +976,7 @@ class PowsyblBackend(Backend):
         return res
 
     def sub_from_bus_id(self, bus_id):
-        #TODO check that the function is doing what we want
+        # TODO check that the function is doing what we want
         if bus_id >= self._number_true_line:
             print(bus_id)
             print(bus_id - self._number_true_line)
@@ -954,7 +1024,6 @@ class PowsyblBackend(Backend):
         self.gen_theta[:] = np.NaN
         self.storage_theta[:] = np.NaN
 
-
     @staticmethod
     def _load_grid_load_p_mw(grid):
         return grid.get_loads()["p"]
@@ -977,7 +1046,6 @@ class PowsyblBackend(Backend):
             for bus_id in grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index:
                 L.append(bus_id)
         return L
-
 
     def _double_buses(self):
         df = self._grid.get_buses()
