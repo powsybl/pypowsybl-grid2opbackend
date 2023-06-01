@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "pypowsybl-grid2opbackend"
+version = "0.1.0"
+description = ""
+authors = ["Vincent Renault <vincent.renault@artelys.com>"]
+readme = "README.md"
+packages = [{include = "pypowsybl_grid2opbackend"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+jupyter = "^1.0.0"
+grid2op = "^1.8.1"
+matplotlib = "^3.7.1"
+gym = "^0.26.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
