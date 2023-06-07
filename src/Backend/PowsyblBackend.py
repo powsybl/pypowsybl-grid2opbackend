@@ -11,7 +11,7 @@ import sys  # laod the python sys default module
 import warnings
 import numpy as np
 import pandas as pd
-
+BUS_EXTENSION = '_dummy'
 import pandapower as pdp
 import pypowsybl as ppow
 import scipy
@@ -230,6 +230,14 @@ class PowsyblBackend(Backend):
         self._init_private_attrs()
 
     def _init_private_attrs(self):
+        """
+        Internal function that is used to initialize all grid2op objects from backend, see
+        https://grid2op.readthedocs.io/en/latest/space.html#grid2op.Space.GridObjects for more detail.
+
+        We ensure that the buses were properly set for Grid2op to work i.e. that there is two buses in each substation.
+        This is done by using the internal function _double_buses
+        :return:
+        """
 
         self.sub_info = np.zeros(self.n_sub, dtype=dt_int)
 
@@ -251,11 +259,11 @@ class PowsyblBackend(Backend):
 
         pos_already_used = np.zeros(self.n_sub, dtype=dt_int)
 
-        # Allows us to map the id of each substation in Grid2op (an integer) with the name of each corresponding bus in
-        # Pypowsybl
+        # Allows us to map the id of each substation in Grid2op (an integer) with the name of each corresponding bus_view
+        # in Powsybl
         self.map_sub = {bus: i for i, (bus, row) in enumerate(self._grid.get_buses(all_attributes=True).iterrows())}
         for i, (bus, row) in enumerate(self._grid.get_buses(all_attributes=True).iterrows()):
-            self.map_sub[bus + '_bis'] = i +self.__nb_bus_before
+            self.map_sub[bus + BUS_EXTENSION ] = i +self.__nb_bus_before
 
         # For lines
         self.line_or_to_subid = np.array([self.map_sub[i] for i in self._grid.get_lines()["bus1_id"].to_list()] +
@@ -345,7 +353,7 @@ class PowsyblBackend(Backend):
         self.storage_v = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
         self._nb_bus_before = None
 
-        # TODO check the other lines of code in PandaPowerBackend
+        # TODO, WIP for next 70 lines check the other lines of code in PandaPowerBackend
 
         # shunts data
         self.n_shunt = self._grid.get_shunt_compensators().shape[0]
@@ -414,7 +422,7 @@ class PowsyblBackend(Backend):
         self.dim_topo = np.sum(self.sub_info)
         self._compute_pos_big_topo()
 
-        # TODO find thermal limitation in matpower import because this is only a hack
+        # TODO write a function to fix thermal limitation.
 
         self.thermal_limit_a = np.array([1000000] * len(self.line_or_to_subid))
         self.thermal_limit_a = self.thermal_limit_a.astype(dt_float)
@@ -493,6 +501,8 @@ class PowsyblBackend(Backend):
                 self.storage_pos_topo_vect[stor_bus.changed][~activated]
             ] = -1
 
+        #TODO WIP for the shunts need to have a fix architecture for the buses
+
         if type(backendAction).shunts_data_available:
             shunt_p, shunt_q, shunt_bus = shunts__
 
@@ -500,16 +510,24 @@ class PowsyblBackend(Backend):
                 self._grid.get_shunt_compensators()["p"].iloc[shunt_p.changed] = shunt_p.values[
                     shunt_p.changed
                 ]
+            print(self.shunt_info())
+            print(shunt_p.values)
+            print(shunt_p.changed)
+            print(shunt_q.values)
+            print(shunt_q.changed)
             if np.any(shunt_q.changed):
+                self._grid.update_shunt_compensators(id=self._grid.get_shunt_compensators(), q=shunt_q.values[shunt_q.changed])
                 self._grid.get_shunt_compensators()["q"].iloc[shunt_q.changed] = shunt_q.values[
                     shunt_q.changed
                 ]
 
             if np.any(shunt_bus.changed):
+                print(shunt_bus.changed)
                 sh_service = shunt_bus.values[shunt_bus.changed] != -1
                 self._grid.get_shunt_compensators()["connected"].iloc[shunt_bus.changed] = sh_service
                 chg_and_in_service = sh_service & shunt_bus.changed
                 # TODO have the backend understand the change of bus on a substation
+
                 print(self._grid.get_shunt_compensators()["bus_id"].loc[chg_and_in_service])
                 print(chg_and_in_service)
                 self._grid.get_shunt_compensators()["bus_id"].loc[chg_and_in_service] = cls.local_bus_to_global(
@@ -529,6 +547,7 @@ class PowsyblBackend(Backend):
                 # storage unit are handled elsewhere
                 self._type_to_bus_set[type_obj](new_bus, id_el_backend, id_topo)
 
+    #TODO for all _apply_... (load,gen,lines...) change those functions to work with pypowsybl
     def _apply_load_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self._init_bus_load[id_el_backend]
@@ -588,7 +607,7 @@ class PowsyblBackend(Backend):
                 warnings.filterwarnings("ignore", category=RuntimeWarning)
                 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-                # TODO see if there is a way of initialazing the calculus of the solver
+                # TODO check the possible use of this parameter and the reason of its to be set as is
 
                 # if self._nb_bus_before is None:
                 #     self._pf_init = "dc"
@@ -618,19 +637,15 @@ class PowsyblBackend(Backend):
                 else:
                     res = ppow.loadflow.run_ac(self._grid,
                                                parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
-                    # print(self._dist_slack)
-                    # print(res)
 
-                # TODO check how to handle
+
+                # TODO check how to handle, seems to be using the pandapower interface
 
                 # # stores the computation time
                 # if "_ppc" in self._grid:
                 #     if "et" in self._grid["_ppc"]:
                 #         self.comp_time += self._grid["_ppc"]["et"]
-                # if self._grid.res_gen.isnull().values.any():
-                #     # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
-                #     # sometimes pandapower does not detect divergence and put Nan.
-                #     raise pdp.powerflow.LoadflowNotConverged("Divergence due to Nan values in res_gen table.")
+
 
                 (
                     self.prod_p[:],
@@ -701,7 +716,7 @@ class PowsyblBackend(Backend):
                 #
                 # self._nb_bus_before = None
                 # self._grid._ppc["gen"][self._iref_slack, 1] = 0.0
-                #
+
                 # handle storage units
                 # note that we have to look ourselves for disconnected storage
                 (
@@ -740,8 +755,8 @@ class PowsyblBackend(Backend):
 
         .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
 
-        As all the functions related to powerline, pandapower split them into multiple dataframe (some for transformers,
-        some for 3 winding transformers etc.). We make sure to get them all here.
+        As all the functions related to powerline, pypowsybl split them into multiple objects to access with separated
+        getters (some for transformers, some for 3 winding transformers etc.). We make sure to get them all here.
         """
         return self.line_status
 
@@ -863,6 +878,7 @@ class PowsyblBackend(Backend):
         return res
 
     def shunt_info(self):
+        # TODO WIP, have to be handle after we chose wisely the bus representation
         cls = type(self)
 
         shunt_p = self._grid.get_shunt_compensators()["p"].values.astype(dt_float)
@@ -1058,6 +1074,10 @@ class PowsyblBackend(Backend):
         return L
 
     def _double_buses(self):
+        """
+        Double the buses in the pypowybl backend to ensure that Grid2op framework is working as desired.
+        :return:
+        """
         df = self._grid.get_buses()
         L = []
         for elem in self._grid.get_voltage_levels().index:
@@ -1065,7 +1085,7 @@ class PowsyblBackend(Backend):
                 L.append(bus_id)
         L_voltage_id = df['voltage_level_id'].to_list()
         for i in range(len(L)):
-            self._grid.create_buses(id=L[i] + '_bis', voltage_level_id=L_voltage_id[i], name=df['name'][i])
+            self._grid.create_buses(id=L[i] + BUS_EXTENSION, voltage_level_id=L_voltage_id[i], name=df['name'][i])
 
     @classmethod
     def local_bus_to_global(cls, local_bus, to_sub_id):
