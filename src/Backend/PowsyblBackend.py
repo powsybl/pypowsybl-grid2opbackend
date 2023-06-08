@@ -429,7 +429,7 @@ class PowsyblBackend(Backend):
                 self.thermal_limit_a[cpt] = limit
             cpt += 1
 
-        # TODO some verification that the fct is working as desired especially that Grid2op can accept None as limitation 
+        # TODO some verification that the fct is working as desired especially that Grid2op can accept None as limitation
 
         self.line_status[:] = self._get_line_status()
         self._topo_vect = self._get_topo_vect()
@@ -551,7 +551,8 @@ class PowsyblBackend(Backend):
                 # storage unit are handled elsewhere
                 self._type_to_bus_set[type_obj](new_bus, id_el_backend, id_topo)
 
-    #TODO for all _apply_... (load,gen,lines...) change those functions to work with pypowsybl
+    #TODO for all _apply_... (load,gen,lines...) change those functions to work with pypowsybl all have to be changed
+    #TODO using move_connectable, I think they should be shorter then those below
     def _apply_load_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self._init_bus_load[id_el_backend]
