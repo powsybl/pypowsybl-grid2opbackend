@@ -154,8 +154,6 @@ class PowsyblBackend(Backend):
             else:
                 raise RuntimeError('This type of file is not handled try a .mat, .xiidm or .json format')
 
-        # TODO to see if we really have to double the bus for grid2op vision
-
         # """
         # We want here to change the network
         # """
@@ -187,8 +185,7 @@ class PowsyblBackend(Backend):
         # and now initialize the attributes (see list bellow)
         self.n_line = copy.deepcopy(self._grid.get_lines().shape[0]) + \
                       copy.deepcopy(self._grid.get_2_windings_transformers().shape[0]) + \
-                      copy.deepcopy(self._grid.get_3_windings_transformers().shape[
-                                        0])  # we add the transfos because they are not modeled in grid2op
+                      copy.deepcopy(self._grid.get_3_windings_transformers().shape[0])  # we add the transfos because they are not modeled in grid2op
         self.n_gen = copy.deepcopy(
             self._grid.get_generators().shape[0])  # number of generators in the grid should be read from self._grid
         self.n_load = copy.deepcopy(
@@ -197,7 +194,6 @@ class PowsyblBackend(Backend):
                                        0])  # we give as an input the number of buses that seems to be corresponding to substations in Grid2op
         self.n_storage = copy.deepcopy(self._grid.get_batteries().shape[0])
 
-        # TODO protection against empty columns
         self.name_load = np.array(self._grid.get_loads()["name"].index.to_list())
         self.name_gen = np.array(self._grid.get_generators()["name"].index.to_list())
         self.name_line = np.array(self._grid.get_lines()["name"].index.to_list() +
@@ -214,10 +210,10 @@ class PowsyblBackend(Backend):
         # the initial thermal limit
         self.thermal_limit_a = None
 
-        # print(self._grid.get_lines()["name"].index.to_list())
         self.__nb_bus_before = self._grid.get_buses().shape[0]
         self.__nb_powerline = self._grid.get_lines().shape[0]
 
+        # Doubling the buses for Grid2op necessities
         self._double_buses()
 
         # other attributes should be read from self._grid (see table below for a full list of the attributes)
@@ -415,20 +411,21 @@ class PowsyblBackend(Backend):
         self._compute_pos_big_topo()
 
         cpt = 0
-        self.thermal_limit_a = np.full(self.n_line, fill_value=np.NaN, dtype=dt_float)
+        self.thermal_limit_a = np.full(self.n_line, fill_value=1000000, dtype=dt_float)
         for elem in self.name_line:
-            if elem in self._grid.get_operational_limits().index:
+
+            if elem in self._grid.get_operational_limits()[np.array(self._grid.get_operational_limits()["type"] == "CURRENT")]:
                 lim_list = []
                 for line_side in self._grid.get_operational_limits()[
                     np.array(self._grid.get_operational_limits()["acceptable_duration"] == -1) & #If this is a permanent limitation, we are not going to take into account other type of limitation
                     np.array(self._grid.get_operational_limits()["type"] == "CURRENT")].iterrows():#If this is a limitation on current
 
-                    lim_list.append(line_side[1]["value"])
-
+                        lim_list.append(line_side[1]["value"])
+                print(lim_list)
                 limit = min(lim_list)
                 self.thermal_limit_a[cpt] = limit
             cpt += 1
-
+        # print(self.thermal_limit_a.astype(dt_float))
         # TODO some verification that the fct is working as desired especially that Grid2op can accept None as limitation
 
         self.line_status[:] = self._get_line_status()
@@ -456,7 +453,7 @@ class PowsyblBackend(Backend):
         # print((prod_p.changed, prod_v.changed, load_p.changed, load_q.changed))
 
         # TODO Normally we don't have to handle this for the backend because inactive buses will not appear in
-        # get_buses() fct for pypowsybl
+        # TODO get_buses() fct for pypowsybl
 
         # handle bus status
         # bus_is = self._grid.get_buses()
