@@ -211,14 +211,8 @@ class PowsyblBackend(Backend):
             self.name_storage = np.array(self._grid.get_batteries()[
                                              "name"].index.to_list())  # By default in powsybl only one type of storage : batteries
 
-        # print(self._grid.get_operational_limits(all_attributes=True))
-
-        # print(self._grid.get_2_windings_transformers())
-
         # the initial thermal limit
         self.thermal_limit_a = None
-
-
 
         # print(self._grid.get_lines()["name"].index.to_list())
         self.__nb_bus_before = self._grid.get_buses().shape[0]
@@ -254,8 +248,6 @@ class PowsyblBackend(Backend):
         if self.n_storage > 0:
             self.storage_to_subid = np.zeros(self.n_storage, dtype=dt_int)
             self.storage_to_sub_pos = np.zeros(self.n_storage, dtype=dt_int)
-
-        # TODO handle storage and other non classical objects
 
         pos_already_used = np.zeros(self.n_sub, dtype=dt_int)
 
@@ -422,10 +414,22 @@ class PowsyblBackend(Backend):
         self.dim_topo = np.sum(self.sub_info)
         self._compute_pos_big_topo()
 
-        # TODO write a function to fix thermal limitation.
+        cpt = 0
+        self.thermal_limit_a = np.full(self.n_line, fill_value=np.NaN, dtype=dt_float)
+        for elem in self.name_line:
+            if elem in self._grid.get_operational_limits().index:
+                lim_list = []
+                for line_side in self._grid.get_operational_limits()[
+                    np.array(self._grid.get_operational_limits()["acceptable_duration"] == -1) & #If this is a permanent limitation, we are not going to take into account other type of limitation
+                    np.array(self._grid.get_operational_limits()["type"] == "CURRENT")].iterrows():#If this is a limitation on current
 
-        self.thermal_limit_a = np.array([1000000] * len(self.line_or_to_subid))
-        self.thermal_limit_a = self.thermal_limit_a.astype(dt_float)
+                    lim_list.append(line_side[1]["value"])
+
+                limit = min(lim_list)
+                self.thermal_limit_a[cpt] = limit
+            cpt += 1
+
+        # TODO some verification that the fct is working as desired especially that Grid2op can accept None as limitation 
 
         self.line_status[:] = self._get_line_status()
         self._topo_vect = self._get_topo_vect()
