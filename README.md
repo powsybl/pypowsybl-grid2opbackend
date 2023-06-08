@@ -22,7 +22,8 @@ In Pypowsybl thermal limitations are set for both buses of a line (two extremiti
 In Grid2op thermal limitations are set for the entire line.
 
 We decided to choose the smallest value of both extremities in pypowsybl and to give that information for the line thermal 
-limitation in Grid2op. We also chose to take into account only permanent limit in current.
+limitation in Grid2op. We also chose to take into account only permanent limit in current. By default if none information
+is available in pypowsybl I set a huge limit which is equal to no limit.
 
 ### Substations
 
