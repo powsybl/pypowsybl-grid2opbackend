@@ -15,7 +15,7 @@ import sys
 sys.path.append('..\src')
 from Backend.PowsyblBackend import PowsyblBackend
 
-env = grid2op.make("D:\Projets\AIRGo\OfficialRepo\pypowsybl-grid2opbackend\src\data_test\l2rpn_case14_sandbox_Pypowsybl",backend = PowsyblBackend(detailed_infos_for_cascading_failures=False))
+env = grid2op.make("src\data_test\l2rpn_case14_sandbox_Pypowsybl",backend = PowsyblBackend(detailed_infos_for_cascading_failures=False))
 max_iter = 5  # we limit the number of iterations to reduce computation time. Put -1 if you don't want to limit it
 env.seed(42)
 obs = env.reset()
