@@ -226,6 +226,24 @@ class PowsyblBackend(Backend):
         # other attributes should be read from self._grid (see table below for a full list of the attributes)
         self._init_private_attrs()
 
+    def reset(self, path=None, grid_filename=None):
+        """
+        INTERNAL
+
+        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
+
+        Reload the grid.
+        For pandapower, it is a bit faster to store of a copy of itself at the end of load_grid
+        and deep_copy it to itself instead of calling load_grid again
+        """
+        # Assign the content of itself as saved at the end of load_grid
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            self._grid = copy.deepcopy(self.__pp_backend_initial_grid)
+        self._reset_all_nan()
+        self._topo_vect[:] = self._get_topo_vect()
+        self.comp_time = 0.0
+
     def _init_private_attrs(self):
         """
         Internal function that is used to initialize all grid2op objects from backend, see
@@ -437,6 +455,15 @@ class PowsyblBackend(Backend):
         self._topo_vect = self._get_topo_vect()
         self.tol = 1e-5  # this is NOT the pandapower tolerance !!!! this is used to check if a storage unit
         # produce / absorbs anything
+
+        # Create a deep copy of itself in the initial state
+        # Store it under super private attribute
+        with warnings.catch_warnings():
+            # raised on some versions of pandapower / pandas
+            warnings.simplefilter("ignore", FutureWarning)
+            self.__pp_backend_initial_grid = copy.deepcopy(
+                self._grid
+            )  # will be initialized in the "assert_grid_correct"
 
     def storage_deact_for_backward_comaptibility(self):
         self._init_private_attrs()
@@ -671,6 +698,7 @@ class PowsyblBackend(Backend):
                 #     if "et" in self._grid["_ppc"]:
                 #         self.comp_time += self._grid["_ppc"]["et"]
 
+                # TODO handle the cases where things are disconnected
                 (
                     self.prod_p[:],
                     self.prod_q[:],
@@ -712,32 +740,22 @@ class PowsyblBackend(Backend):
 
                 self.p_or[:] = self._aux_get_line_info("p1", "p1", "p1")
                 self.q_or[:] = self._aux_get_line_info("q1", "q1", "q1")
-                self.v_or[:] = self._grid.get_buses()['v_mag'][self._grid.get_branches()['bus1_id'].values].values
+                self.v_or[:] = self._aux_get_voltage_info(self._grid.get_branches()['bus1_id'])
                 self.a_or[:] = self._aux_get_line_info("i1", "i1", "i1")
-                self.theta_or[:] = self._grid.get_buses()['v_angle'][self._grid.get_branches()['bus1_id'].values].values
+                self.theta_or[:] = self._aux_get_theta_info(self._grid.get_branches()['bus1_id'])
                 self.a_or[~np.isfinite(self.a_or)] = 0.0
                 self.v_or[~np.isfinite(self.v_or)] = 0.0
 
                 self.p_ex[:] = self._aux_get_line_info("p2", "p2", "p2")
                 self.q_ex[:] = self._aux_get_line_info("q2", "q2", "q2")
-                self.v_ex[:] = self._grid.get_buses()['v_mag'][self._grid.get_branches()['bus2_id'].values].values
+                self.v_ex[:] = self._aux_get_voltage_info(self._grid.get_branches()['bus2_id'])
                 self.a_ex[:] = self._aux_get_line_info("i2", "i2", "i2")
-                self.theta_ex[:] = self._grid.get_buses()['v_angle'][self._grid.get_branches()['bus2_id'].values].values
+                self.theta_ex[:] = self._aux_get_theta_info(self._grid.get_branches()['bus2_id'])
                 self.a_ex[~np.isfinite(self.a_ex)] = 0.0
                 self.v_ex[~np.isfinite(self.v_ex)] = 0.0
 
                 # TODO check the lines below to integrate them properly
 
-                # # it seems that pandapower does not take into account disconencted powerline for their voltage
-                # self.v_or[~self.line_status] = 0.0
-                # self.v_ex[~self.line_status] = 0.0
-                # self.v_or[:] *= self.lines_or_pu_to_kv
-                # self.v_ex[:] *= self.lines_ex_pu_to_kv
-
-                # # see issue https://github.com/rte-france/Grid2Op/issues/389
-                # self.theta_or[~np.isfinite(self.theta_or)] = 0.0
-                # self.theta_ex[~np.isfinite(self.theta_ex)] = 0.0
-                #
                 # self._nb_bus_before = None
                 # self._grid._ppc["gen"][self._iref_slack, 1] = 0.0
 
@@ -808,6 +826,24 @@ class PowsyblBackend(Backend):
             )
         ).astype(dt_bool)
 
+    def _aux_get_voltage_info(self, elements):
+        v_list = []
+        for elem in elements:
+            if elem == '':
+                v_list.append(0)
+            else:
+                v_list.append(self._grid.get_buses()['v_mag'][elem])
+        return v_list
+
+    def _aux_get_theta_info(self, elements):
+        v_list = []
+        for elem in elements:
+            if elem == '':
+                v_list.append(0)
+            else:
+                v_list.append(self._grid.get_buses()['v_angle'][elem])
+        return v_list
+
     def get_topo_vect(self):
         return self._topo_vect
 
@@ -818,10 +854,10 @@ class PowsyblBackend(Backend):
 
         i = 0
         for row in self._grid.get_lines()[["bus1_id", "bus2_id"]].values:
-            bus_or_id = self.map_sub[row[0]]
-            bus_ex_id = self.map_sub[row[1]]
 
             if line_status[i]:
+                bus_or_id = self.map_sub[row[0]]
+                bus_ex_id = self.map_sub[row[1]]
                 res[self.line_or_pos_topo_vect[i]] = (
                     1 if bus_or_id == self.line_or_to_subid[i] else 2
                 )
@@ -838,12 +874,12 @@ class PowsyblBackend(Backend):
         # For 2 windings transfo
         i = 0
         for row in self._grid.get_2_windings_transformers()[["bus1_id", "bus2_id"]].values:
-            bus_or_id = self.map_sub[row[0]]
-            bus_ex_id = self.map_sub[row[1]]
 
             j = i + nb
 
             if line_status[j]:
+                bus_or_id = self.map_sub[row[0]]
+                bus_ex_id = self.map_sub[row[1]]
                 res[self.line_or_pos_topo_vect[j]] = (
                     1 if bus_or_id == self.line_or_to_subid[j] else 2
                 )
@@ -858,14 +894,14 @@ class PowsyblBackend(Backend):
         # For 3 windings transfo
         i = 0
         for row in self._grid.get_3_windings_transformers()[["bus1_id", "bus2_id"]].values:
-            bus_or_id = self.map_sub[row[0]]
-            bus_ex_id = self.map_sub[row[1]]
 
             if j is not None:
                 k = j + i
             else:
                 k = nb + i
             if line_status[k]:
+                bus_or_id = self.map_sub[row[0]]
+                bus_ex_id = self.map_sub[row[1]]
                 res[self.line_or_pos_topo_vect[k]] = (
                     1 if bus_or_id == self.line_or_to_subid[j] else 2
                 )
@@ -929,9 +965,11 @@ class PowsyblBackend(Backend):
             # deactivated from the Environment...
             p_storage = self._grid.get_batteries()["p"].values.astype(dt_float)
             q_storage = self._grid.get_batteries()["q"].values.astype(dt_float)
-            v_storage = self._grid.get_buses()['v_mag'][self._grid.get_batteries()['bus_id']].values.astype(dt_float)
-            theta_storage = self._grid.get_buses()['v_angle'][self._grid.get_batteries()['bus_id']].values.astype(
-                dt_float)
+            v_storage = self._aux_get_voltage_info(self._grid.get_batteries()['bus_id'])
+            # v_storage = self._grid.get_buses()['v_mag'][self._grid.get_batteries()['bus_id']].values.astype(dt_float)
+            theta_storage = self._aux_get_theta_info(self._grid.get_batteries()['bus_id'])
+            # theta_storage = self._grid.get_buses()['v_angle'][self._grid.get_batteries()['bus_id']].values.astype(
+            #     dt_float)
 
         else:
             p_storage = np.zeros(shape=0, dtype=dt_float)
@@ -950,8 +988,11 @@ class PowsyblBackend(Backend):
     def _gens_info(self):
         prod_p = self._grid.get_generators()["p"].values.astype(dt_float)
         prod_q = self._grid.get_generators()["q"].values.astype(dt_float)
-        prod_v = self._grid.get_buses()['v_mag'][self._grid.get_generators()['bus_id']].values.astype(dt_float)
-        prod_theta = self._grid.get_buses()['v_angle'][self._grid.get_generators()['bus_id']].values.astype(dt_float)
+        prod_v = self._aux_get_voltage_info(self._grid.get_generators()['bus_id'])
+        # prod_v = self._grid.get_buses()['v_mag'][self._grid.get_generators()['bus_id']].values.astype(dt_float)
+        prod_theta = self._aux_get_theta_info(self._grid.get_generators()['bus_id'])
+
+        # prod_theta = self._grid.get_buses()['v_angle'][self._grid.get_generators()['bus_id']].values.astype(dt_float)
 
         # TODO understand if the same problem occurs in powsybl
 
@@ -979,8 +1020,10 @@ class PowsyblBackend(Backend):
     def _loads_info(self):
         load_p = self._grid.get_loads()["p"].values.astype(dt_float)
         load_q = self._grid.get_loads()["q"].values.astype(dt_float)
-        load_v = self._grid.get_buses()['v_mag'][self._grid.get_loads()['bus_id'].values].values.astype(dt_float)
-        load_theta = self._grid.get_buses()['v_angle'][self._grid.get_loads()['bus_id'].values].values.astype(dt_float)
+        load_v = self._aux_get_voltage_info(self._grid.get_loads()['bus_id'])
+        # load_v = self._grid.get_buses()['v_mag'][self._grid.get_loads()['bus_id'].values].values.astype(dt_float)
+        load_theta = self._aux_get_theta_info(self._grid.get_loads()['bus_id'])
+        # load_theta = self._grid.get_buses()['v_angle'][self._grid.get_loads()['bus_id'].values].values.astype(dt_float)
         return load_p, load_q, load_v, load_theta
 
     def lines_or_info(self):
@@ -1325,3 +1368,17 @@ class PowsyblBackend(Backend):
         res.storage_theta = copy.deepcopy(self.storage_theta)
 
         return res
+
+    def close(self):
+        """
+        INTERNAL
+
+        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
+
+        Called when the :class:`grid2op;Environment` has terminated, this function only reset the grid to a state
+        where it has not been loaded.
+        """
+        del self._grid
+        self._grid = None
+        del self.__pp_backend_initial_grid
+        self.__pp_backend_initial_grid = None
