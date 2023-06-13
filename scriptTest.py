@@ -3,12 +3,15 @@ from grid2op.Agent import DoNothingAgent
 from grid2op.PlotGrid import PlotMatplot
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from grid2op.Backend.PandaPowerBackend import PandaPowerBackend
 
 from src.Backend.PowsyblBackend import PowsyblBackend
 
 if __name__ == "__main__":
-
     env = grid2op.make("src\data_test\l2rpn_case14_sandbox_Pypowsybl", backend=PowsyblBackend(detailed_infos_for_cascading_failures=False))
+
+    # env = grid2op.make("l2rpn_case14_sandbox", backend=PandaPowerBackend(detailed_infos_for_cascading_failures=False))
+    max_iter = 5
     env.seed(42)
     plot_helper = PlotMatplot(env.observation_space)
     my_agent = DoNothingAgent(env.action_space)
@@ -24,6 +27,8 @@ if __name__ == "__main__":
             while True:
                 action = my_agent.act(obs, reward, done)
                 obs, reward, done, _ = env.step(action)
+                fig = plot_helper.plot_obs(obs)
+                plt.show()
                 pbar.update(1)
                 if done:
                     break
