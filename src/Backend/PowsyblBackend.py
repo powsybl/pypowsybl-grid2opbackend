@@ -33,6 +33,8 @@ except (ImportError, ModuleNotFoundError):
         "\n\t{} -m pip install numba\n".format(sys.executable)
     )
 
+from .network import load as load_ppow_network
+
 
 class PowsyblBackend(Backend):
 
@@ -111,6 +113,7 @@ class PowsyblBackend(Backend):
 
         self.dim_topo = -1
         self._number_true_line = -1
+        self.cst_1 = dt_float(1.0)
 
         self.tol = None
         self.map_sub = {}
@@ -118,8 +121,8 @@ class PowsyblBackend(Backend):
         self.__nb_powerline = (
             None  # number of powerline (real powerline, not transformer)
         )
-    def load_grid(self, path, filename=None):
 
+    def load_grid(self, path, filename=None):
         if path is None and filename is None:
             raise RuntimeError(
                 "You must provide at least one of path or file to load a powergrid."
@@ -148,15 +151,14 @@ class PowsyblBackend(Backend):
                     _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat', init='flat')
                 else:
                     _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat')
-                self._grid = ppow.network.load(full_path.split('.')[0] + '.mat',
+                self._grid = load_ppow_network(full_path.split('.')[0] + '.mat',
                                                {'matpower.import.ignore-base-voltage': 'false'})
             elif full_path.endswith('.mat'):
-                self._grid = ppow.network.load(full_path, {'matpower.import.ignore-base-voltage': 'false'})
+                self._grid = load_ppow_network(full_path, {'matpower.import.ignore-base-voltage': 'false'})
             elif full_path.endswith('.xiidm'):
-                self._grid = ppow.network.load(full_path)
+                self._grid = load_ppow_network(full_path)
             else:
                 raise RuntimeError('This type of file is not handled try a .mat, .xiidm or .json format')
-        # print(self._grid.get_generators(all_attributes=True))
         # """
         # We want here to change the network
         # """
@@ -173,27 +175,43 @@ class PowsyblBackend(Backend):
         #             distributed_slack=self._dist_slack,
         #         )
 
+        self.__nb_bus_before = self._grid.get_buses().shape[0]
         self.__nb_powerline = self._grid.get_lines().shape[0]
+        self._init_bus_load = self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].values
+        self._init_bus_gen = self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].values
+        self._init_bus_lor = self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].values
+        self._init_bus_lex = self._grid.get_lines(all_attributes=True)["bus_breaker_bus2_id"].values
 
+        t_for = self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus1_id"].values
+        t_fex = self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus2_id"].values
+        self._init_bus_lor = np.concatenate((self._init_bus_lor, t_for))
+        self._init_bus_lex = np.concatenate((self._init_bus_lex, t_fex))
 
         # and now initialize the attributes (see list bellow)
+        if self._grid.get_3_windings_transformers().shape[0] > 0:
+            raise BackendError(f"3 windings transformers are currently not supporter. "
+                               f"{self._grid.get_3_windings_transformers().shape[0]} found")
+
         self.n_line = copy.deepcopy(self._grid.get_lines().shape[0]) + \
-                      copy.deepcopy(self._grid.get_2_windings_transformers().shape[0]) + \
-                      copy.deepcopy(self._grid.get_3_windings_transformers().shape[0])  # we add the transfos because they are not modeled in grid2op
+                      copy.deepcopy(self._grid.get_2_windings_transformers().shape[0])
+        self.name_line = np.array(
+            self._grid.get_lines()["name"].index.to_list() +
+            self._grid.get_2_windings_transformers()["name"].index.to_list()
+        )
+
         self.n_gen = copy.deepcopy(
             self._grid.get_generators().shape[0])  # number of generators in the grid should be read from self._grid
+        self.name_gen = np.array(self._grid.get_generators()["name"].index.to_list())
+
         self.n_load = copy.deepcopy(
             self._grid.get_loads().shape[0])  # number of loads in the grid should be read from self._grid
+        self.name_load = np.array(self._grid.get_loads()["name"].index.to_list())
+
         self.n_sub = copy.deepcopy(self._grid.get_buses().shape[
                                        0])  # we give as an input the number of buses that seems to be corresponding to substations in Grid2op
-        self.n_storage = copy.deepcopy(self._grid.get_batteries().shape[0])
-
-        self.name_load = np.array(self._grid.get_loads()["name"].index.to_list())
-        self.name_gen = np.array(self._grid.get_generators()["name"].index.to_list())
-        self.name_line = np.array(self._grid.get_lines()["name"].index.to_list() +
-                                  self._grid.get_2_windings_transformers()["name"].index.to_list() +
-                                  self._grid.get_3_windings_transformers()["name"].index.to_list())
         self.name_sub = np.array(["sub_{}".format(i) for i in self._pypowsbyl_bus_name_utility_fct(self._grid)])
+
+        self.n_storage = copy.deepcopy(self._grid.get_batteries().shape[0])
 
         if self.n_storage == 0:
             self.set_no_storage()  # deactivate storage in grid objects
@@ -204,20 +222,12 @@ class PowsyblBackend(Backend):
         # the initial thermal limit
         self.thermal_limit_a = None
 
-        self.__nb_bus_before = self._grid.get_buses().shape[0]
-        self.__nb_powerline = self._grid.get_lines().shape[0]
-        self._init_bus_load = self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].values
-        self._init_bus_gen = self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].values
-        self._init_bus_lor = self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].values
-        self._init_bus_lex = self._grid.get_lines(all_attributes=True)["bus_breaker_bus2_id"].values
-
         list_buses = []
         for elem in self._grid.get_voltage_levels()['name'].index.values:
             list_buses = list_buses+list(self._grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index)
 
         for i in range(len(list_buses)):
             self.map_sub[list_buses[i]] = i
-
 
         # Doubling the buses for Grid2op necessities
         self._double_buses()
@@ -248,7 +258,7 @@ class PowsyblBackend(Backend):
         # Assign the content of itself as saved at the end of load_grid
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
-            self._grid = copy.deepcopy(self.__pp_backend_initial_grid)
+            self._grid = self.__pp_backend_initial_grid.deepcopy()
         self._reset_all_nan()
         self._topo_vect[:] = self._get_topo_vect()
         self.comp_time = 0.0
@@ -262,9 +272,7 @@ class PowsyblBackend(Backend):
         This is done by using the internal function _double_buses
         :return:
         """
-
         self.sub_info = np.zeros(self.n_sub, dtype=dt_int)
-
         self.load_to_subid = np.zeros(self.n_load, dtype=dt_int)
         self.gen_to_subid = np.zeros(self.n_gen, dtype=dt_int)
         self.line_or_to_subid = np.zeros(self.n_line, dtype=dt_int)
@@ -287,23 +295,19 @@ class PowsyblBackend(Backend):
             add_map[elem + BUS_EXTENSION] = self.map_sub[elem] + self.__nb_bus_before
         self.map_sub.update(add_map)
 
-        # For lines
-        self.line_or_to_subid = np.array([self.map_sub[i] for i in self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].to_list()] +
-                                         [self.map_sub[i] for i in
-                                          self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus1_id"].to_list()] +
-                                         [self.map_sub[i] for i in
-                                          self._grid.get_3_windings_transformers(all_attributes=True)["bus_breaker_bus1_id"].to_list()])
+        # For lines & trafos
+        self.line_or_to_subid = np.array(
+            [self.map_sub[i] for i in self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].to_list()] +
+            [self.map_sub[i] for i in self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus1_id"].to_list()])
         for i in range(len(self.line_or_to_subid)):
             self.sub_info[self.line_or_to_subid[i]] += 1
             self.line_or_to_sub_pos[i] = pos_already_used[self.line_or_to_subid[i]]
             pos_already_used[self.line_or_to_subid[i]] += 1
-            # pos_already_used[sub_or_id] += 1
 
-        self.line_ex_to_subid = np.array([self.map_sub[i] for i in self._grid.get_lines(all_attributes=True)["bus_breaker_bus2_id"].to_list()] +
-                                         [self.map_sub[i] for i in
-                                          self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus2_id"].to_list()] +
-                                         [self.map_sub[i] for i in
-                                          self._grid.get_3_windings_transformers(all_attributes=True)["bus_breaker_bus2_id"].to_list()])
+        self.line_ex_to_subid = np.array(
+            [self.map_sub[i] for i in self._grid.get_lines(all_attributes=True)["bus_breaker_bus2_id"].to_list()] +
+            [self.map_sub[i] for i in self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus2_id"].to_list()]
+        )
 
         for i in range(len(self.line_ex_to_subid)):
             self.sub_info[self.line_ex_to_subid[i]] += 1
@@ -313,16 +317,19 @@ class PowsyblBackend(Backend):
         self._number_true_line = copy.deepcopy(self._grid.get_lines().shape[0])
 
         # For generators
-        self.gen_to_subid = np.array([self.map_sub[i] for i in self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].to_list()])
+        self.gen_to_subid = np.array(
+            [self.map_sub[i] for i in self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].to_list()]
+        )
 
         for i in range(len(self.gen_to_subid)):
             self.sub_info[self.gen_to_subid[i]] += 1
             self.gen_to_sub_pos[i] = pos_already_used[self.gen_to_subid[i]]
             pos_already_used[self.gen_to_subid[i]] += 1
-        # for i, (_, row) in enumerate(self._grid.get_generators().iterrows()):
 
         # For loads
-        self.load_to_subid = np.array([self.map_sub[i] for i in self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].to_list()])
+        self.load_to_subid = np.array(
+            [self.map_sub[i] for i in self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].to_list()]
+        )
 
         for i in range(len(self.load_to_subid)):
             self.sub_info[self.load_to_subid[i]] += 1
@@ -330,7 +337,9 @@ class PowsyblBackend(Backend):
             pos_already_used[self.load_to_subid[i]] += 1
 
         # For storage
-        self.storage_to_subid = np.array([self.map_sub[i] for i in self._grid.get_batteries(all_attributes=True)["bus_breaker_bus_id"].to_list()])
+        self.storage_to_subid = np.array(
+            [self.map_sub[i] for i in self._grid.get_batteries(all_attributes=True)["bus_breaker_bus_id"].to_list()]
+        )
 
         if self.n_storage > 0:
             for i in range(len(self.storage_to_subid)):
@@ -470,9 +479,7 @@ class PowsyblBackend(Backend):
         with warnings.catch_warnings():
             # raised on some versions of pandapower / pandas
             warnings.simplefilter("ignore", FutureWarning)
-            self.__pp_backend_initial_grid = copy.deepcopy(
-                self._grid
-            )  # will be initialized in the "assert_grid_correct"
+            self.__pp_backend_initial_grid = self._grid.deepcopy()  # will be initialized in the "assert_grid_correct"
 
     def storage_deact_for_backward_comaptibility(self):
         self._init_private_attrs()
@@ -481,8 +488,6 @@ class PowsyblBackend(Backend):
         if backendAction is None:
             return
         cls = type(self)
-        print(cls)
-
         (
             active_bus,
             (prod_p, prod_v, load_p, load_q, storage),
@@ -501,37 +506,21 @@ class PowsyblBackend(Backend):
 
         # tmp_prod_p = self._get_vector_inj["prod_p"](self._grid)
         if np.any(prod_p.changed):
-            # print("here")
-            print("changing prod_p")
-            # print(prod_p.values[prod_p.changed])
-            # print(self._grid.get_generators(all_attributes=True))
-            self._grid.update_generators(id=self.name_gen, p=prod_p.values)
-            # self._grid.update_generators(id=self.name_gen, target_p=prod_p.values+1)
+            self._grid.update_generators(id=self.name_gen, target_p=prod_p.values)
 
-            # tmp_prod_p.iloc[prod_p.changed] = prod_p.values[prod_p.changed]
-
-
-        # tmp_prod_v = self._get_vector_inj["prod_v"](self._grid)
         if np.any(prod_v.changed):
-            pass
             # TODO check if changing the target_v is the good way to do it, seems not I have to find a solution
-            # self._grid.update_generators(id=self.name_gen, target_v=prod_v.values)
+            self._grid.update_generators(id=self.name_gen, target_v=prod_v.values)
 
             # tmp_prod_v.iloc[prod_v.changed] = (
             #     prod_v.values[prod_v.changed]  # / self.prod_pu_to_kv[prod_v.changed]
             # )
 
-        # tmp_load_p = self._get_vector_inj["load_p"](self._grid)
         if np.any(load_p.changed):
-            print("changing load p")
-            self._grid.update_loads(id=self.name_load, p=load_p.values)
-            # tmp_load_p.iloc[load_p.changed] = load_p.values[load_p.changed]
+            self._grid.update_loads(id=self.name_load, p0=load_p.values)
 
-        # tmp_load_q = self._get_vector_inj["load_q"](self._grid)
         if np.any(load_q.changed):
-            print("changing load q")
-            self._grid.update_loads(id=self.name_load, q=load_q.values)
-            # tmp_load_q.iloc[load_q.changed] = load_q.values[load_q.changed]
+            self._grid.update_loads(id=self.name_load, q0=load_q.values)
 
         if self.n_storage > 0:
             # active setpoint
@@ -566,11 +555,6 @@ class PowsyblBackend(Backend):
                 self._grid.get_shunt_compensators()["p"].iloc[shunt_p.changed] = shunt_p.values[
                     shunt_p.changed
                 ]
-            # print(self.shunt_info())
-            # print(shunt_p.values)
-            # print(shunt_p.changed)
-            # print(shunt_q.values)
-            # print(shunt_q.changed)
             if np.any(shunt_q.changed):
                 self._grid.update_shunt_compensators(id=self._grid.get_shunt_compensators(), q=shunt_q.values[shunt_q.changed])
                 self._grid.get_shunt_compensators()["q"].iloc[shunt_q.changed] = shunt_q.values[
@@ -578,18 +562,15 @@ class PowsyblBackend(Backend):
                 ]
 
             if np.any(shunt_bus.changed):
-                # print(shunt_bus.changed)
                 sh_service = shunt_bus.values[shunt_bus.changed] != -1
                 self._grid.get_shunt_compensators()["connected"].iloc[shunt_bus.changed] = sh_service
                 chg_and_in_service = sh_service & shunt_bus.changed
                 # TODO have the backend understand the change of bus on a substation WIP
-                # print(self._grid.get_shunt_compensators(all_attributes=True))
                 ppow.network.move_connectable(network=self._grid,
                                               equipment_id=self._grid.get_shunt_compensators()['name'].iloc[shunt_bus.changed].values,
                                               bus_origin_id=chg_and_in_service,
                                               bus_destination_id=cls.local_bus_to_global(shunt_bus.values[chg_and_in_service],
                                                                                          cls.shunt_to_subid[chg_and_in_service]))
-                # print(self._grid.get_shunt_compensators(all_attributes=True))
 
         # i made at least a real change, so i implement it in the backend
         for id_el, new_bus in topo__:
@@ -675,14 +656,6 @@ class PowsyblBackend(Backend):
         self.change_bus_trafo_hv(id_topo, new_bus_backend)
 
     def runpf(self, is_dc=False):
-        # print(self._grid.get_generators(all_attributes=True))
-        print('enter in loadflow')
-        # print(self._grid.get_generators(all_attributes=True))
-        print(self._grid.get_loads(all_attributes=True))
-
-        # print(self._grid.get_buses(all_attributes=True))
-        nb_bus = self.get_nb_active_bus()
-
         try:
             with warnings.catch_warnings():
                 # remove the warning if _grid non connex. And it that case load flow as not converged
@@ -813,23 +786,16 @@ class PowsyblBackend(Backend):
                 self.line_status[:] = self._get_line_status()
                 self._topo_vect[:] = self._get_topo_vect()
 
-                print(res)
 
                 if res[0].status == ppow._pypowsybl.LoadFlowComponentStatus.FAILED:
-                    # print(self._grid.get_generators(all_attributes=True))
-                    # print(self._grid.get_buses(all_attributes=True))
                     return False, None
                 else:
-                    # print(self._grid.get_generators(all_attributes=True))
-                    # print(self._grid.get_buses(all_attributes=True))
                     return True, None
 
         except BackendError as exc_:
             # of the powerflow has not converged, results are Nan
             self._reset_all_nan()
             msg = exc_.__str__()
-            # print(self._grid.get_generators(all_attributes=True))
-            # print(self._grid.get_buses(all_attributes=True))
             return False, DivergingPowerFlow(f'powerflow diverged with error :"{msg}"')
 
     def get_line_status(self):
@@ -886,7 +852,7 @@ class PowsyblBackend(Backend):
         return self._topo_vect
 
     def _get_topo_vect(self):
-        res = np.full(self.dim_topo, fill_value=np.NaN, dtype=dt_int)
+        res = np.full(self.dim_topo, fill_value=np.nan, dtype=dt_int)
 
         line_status = self.get_line_status()
 
@@ -912,9 +878,7 @@ class PowsyblBackend(Backend):
         # For 2 windings transfo
         i = 0
         for row in self._grid.get_2_windings_transformers(all_attributes=True)[["bus_breaker_bus1_id", "bus_breaker_bus2_id"]].values:
-
             j = i + nb
-
             if line_status[j]:
                 bus_or_id = self.map_sub[row[0]]
                 bus_ex_id = self.map_sub[row[1]]
@@ -1024,8 +988,8 @@ class PowsyblBackend(Backend):
         )
 
     def _gens_info(self):
-        prod_p = self._grid.get_generators()["p"].values.astype(dt_float)
-        prod_q = self._grid.get_generators()["q"].values.astype(dt_float)
+        prod_p = - self._grid.get_generators()["p"].values.astype(dt_float)
+        prod_q = - self._grid.get_generators()["q"].values.astype(dt_float)
         prod_v = self._aux_get_voltage_info(self._grid.get_generators()['bus_id'])
         # prod_v = self._grid.get_buses()['v_mag'][self._grid.get_generators()['bus_id']].values.astype(dt_float)
         prod_theta = self._aux_get_theta_info(self._grid.get_generators()['bus_id'])
@@ -1104,7 +1068,6 @@ class PowsyblBackend(Backend):
             (
                 self._grid.get_lines()[colname1].values,
                 self._grid.get_2_windings_transformers()[colname2].values,
-                self._grid.get_3_windings_transformers()[colname3].values,
             )
         )
         return res
@@ -1112,9 +1075,6 @@ class PowsyblBackend(Backend):
     def sub_from_bus_id(self, bus_id):
         # TODO check that the function is doing what we want
         if bus_id >= self._number_true_line:
-            print("In sub_from_bus_id")
-            print(bus_id)
-            print(bus_id - self._number_true_line)
             return bus_id - self._number_true_line
         return bus_id
 
@@ -1322,7 +1282,7 @@ class PowsyblBackend(Backend):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             # warnings depending on pandas version and pp version
-            res._grid = copy.deepcopy(self._grid)
+            res._grid = self._grid.deepcopy()
         res.thermal_limit_a = copy.deepcopy(self.thermal_limit_a)
         res._sh_vnkv = copy.deepcopy(self._sh_vnkv)
         res.comp_time = self.comp_time
@@ -1390,7 +1350,7 @@ class PowsyblBackend(Backend):
         res._big_topo_to_backend = copy.deepcopy(self._big_topo_to_backend)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
-            res.__pp_backend_initial_grid = copy.deepcopy(self.__pp_backend_initial_grid)
+            res.__pp_backend_initial_grid = self.__pp_backend_initial_grid.deepcopy()
 
         res.tol = (
             self.tol
