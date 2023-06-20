@@ -227,9 +227,9 @@ class PowsyblBackend(Backend):
             warnings.filterwarnings("ignore")
             res = ppow.loadflow.run_ac(self._grid,
                                        parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
-        if not res[0].slack_bus_id:
-            BackendError("The environment do not have a configured slack_bus, try to add it by hand in the initial data"
-                         "file")
+        # if not res[0].slack_bus_id:
+        #     BackendError("The environment do not have a configured slack_bus, try to add it by hand in the initial data"
+        #                  "file")
 
         # other attributes should be read from self._grid (see table below for a full list of the attributes)
         self._init_private_attrs()
@@ -481,7 +481,6 @@ class PowsyblBackend(Backend):
         if backendAction is None:
             return
         cls = type(self)
-        print(cls)
 
         (
             active_bus,
@@ -501,21 +500,15 @@ class PowsyblBackend(Backend):
 
         # tmp_prod_p = self._get_vector_inj["prod_p"](self._grid)
         if np.any(prod_p.changed):
-            # print("here")
-            print("changing prod_p")
-            # print(prod_p.values[prod_p.changed])
-            # print(self._grid.get_generators(all_attributes=True))
-            self._grid.update_generators(id=self.name_gen, p=prod_p.values)
+            self._grid.update_generators(id=self.name_gen, target_p=prod_p.values)
             # self._grid.update_generators(id=self.name_gen, target_p=prod_p.values+1)
-
             # tmp_prod_p.iloc[prod_p.changed] = prod_p.values[prod_p.changed]
 
 
         # tmp_prod_v = self._get_vector_inj["prod_v"](self._grid)
         if np.any(prod_v.changed):
-            pass
             # TODO check if changing the target_v is the good way to do it, seems not I have to find a solution
-            # self._grid.update_generators(id=self.name_gen, target_v=prod_v.values)
+            self._grid.update_generators(id=self.name_gen, target_v=prod_v.values)
 
             # tmp_prod_v.iloc[prod_v.changed] = (
             #     prod_v.values[prod_v.changed]  # / self.prod_pu_to_kv[prod_v.changed]
@@ -523,14 +516,12 @@ class PowsyblBackend(Backend):
 
         # tmp_load_p = self._get_vector_inj["load_p"](self._grid)
         if np.any(load_p.changed):
-            print("changing load p")
-            self._grid.update_loads(id=self.name_load, p=load_p.values)
+            self._grid.update_loads(id=self.name_load, p0=load_p.values)
             # tmp_load_p.iloc[load_p.changed] = load_p.values[load_p.changed]
 
         # tmp_load_q = self._get_vector_inj["load_q"](self._grid)
         if np.any(load_q.changed):
-            print("changing load q")
-            self._grid.update_loads(id=self.name_load, q=load_q.values)
+            self._grid.update_loads(id=self.name_load, q0=load_q.values)
             # tmp_load_q.iloc[load_q.changed] = load_q.values[load_q.changed]
 
         if self.n_storage > 0:
@@ -566,11 +557,7 @@ class PowsyblBackend(Backend):
                 self._grid.get_shunt_compensators()["p"].iloc[shunt_p.changed] = shunt_p.values[
                     shunt_p.changed
                 ]
-            # print(self.shunt_info())
-            # print(shunt_p.values)
-            # print(shunt_p.changed)
-            # print(shunt_q.values)
-            # print(shunt_q.changed)
+
             if np.any(shunt_q.changed):
                 self._grid.update_shunt_compensators(id=self._grid.get_shunt_compensators(), q=shunt_q.values[shunt_q.changed])
                 self._grid.get_shunt_compensators()["q"].iloc[shunt_q.changed] = shunt_q.values[
@@ -578,18 +565,15 @@ class PowsyblBackend(Backend):
                 ]
 
             if np.any(shunt_bus.changed):
-                # print(shunt_bus.changed)
                 sh_service = shunt_bus.values[shunt_bus.changed] != -1
                 self._grid.get_shunt_compensators()["connected"].iloc[shunt_bus.changed] = sh_service
                 chg_and_in_service = sh_service & shunt_bus.changed
                 # TODO have the backend understand the change of bus on a substation WIP
-                # print(self._grid.get_shunt_compensators(all_attributes=True))
                 ppow.network.move_connectable(network=self._grid,
                                               equipment_id=self._grid.get_shunt_compensators()['name'].iloc[shunt_bus.changed].values,
                                               bus_origin_id=chg_and_in_service,
                                               bus_destination_id=cls.local_bus_to_global(shunt_bus.values[chg_and_in_service],
                                                                                          cls.shunt_to_subid[chg_and_in_service]))
-                # print(self._grid.get_shunt_compensators(all_attributes=True))
 
         # i made at least a real change, so i implement it in the backend
         for id_el, new_bus in topo__:
@@ -678,7 +662,7 @@ class PowsyblBackend(Backend):
         # print(self._grid.get_generators(all_attributes=True))
         print('enter in loadflow')
         # print(self._grid.get_generators(all_attributes=True))
-        print(self._grid.get_loads(all_attributes=True))
+        # print(self._grid.get_loads(all_attributes=True))
 
         # print(self._grid.get_buses(all_attributes=True))
         nb_bus = self.get_nb_active_bus()
@@ -721,7 +705,9 @@ class PowsyblBackend(Backend):
                                                parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
                 else:
                     res = ppow.loadflow.run_ac(self._grid,
-                                               parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
+                                               parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack,
+                                                                                   # voltage_init_mode="PREVIOUS_VALUES",
+                                                                                   ))
 
 
                 # TODO check how to handle, seems to be using the pandapower interface
@@ -1024,8 +1010,8 @@ class PowsyblBackend(Backend):
         )
 
     def _gens_info(self):
-        prod_p = self._grid.get_generators()["p"].values.astype(dt_float)
-        prod_q = self._grid.get_generators()["q"].values.astype(dt_float)
+        prod_p = -self._grid.get_generators()["p"].values.astype(dt_float)
+        prod_q = -self._grid.get_generators()["q"].values.astype(dt_float)
         prod_v = self._aux_get_voltage_info(self._grid.get_generators()['bus_id'])
         # prod_v = self._grid.get_buses()['v_mag'][self._grid.get_generators()['bus_id']].values.astype(dt_float)
         prod_theta = self._aux_get_theta_info(self._grid.get_generators()['bus_id'])
