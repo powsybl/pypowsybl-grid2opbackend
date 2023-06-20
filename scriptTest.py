@@ -27,8 +27,6 @@ if __name__ == "__main__":
             while True:
                 action = my_agent.act(obs, reward, done)
                 obs, reward, done, _ = env.step(action)
-                fig = plot_helper.plot_obs(obs)
-                plt.show()
                 pbar.update(1)
                 if done:
                     break
