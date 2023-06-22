@@ -60,4 +60,4 @@ if __name__ == "__main__":
 
     backends = ["powsybl", "pandapower"]
     for backend in backends:
-        run(backend=backend, n_iter=3)
+        run(backend=backend, n_iter=50)
