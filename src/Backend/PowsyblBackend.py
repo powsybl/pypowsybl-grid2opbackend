@@ -83,6 +83,7 @@ class PowsyblBackend(Backend):
 
         self._nb_bus_before = None
 
+        self.can_output_theta = True  # I support the voltage angle
         self.theta_or = None
         self.theta_ex = None
         self.load_theta = None
@@ -108,7 +109,7 @@ class PowsyblBackend(Backend):
             self._apply_lor_bus,
             self._apply_trafo_hv,
             self._apply_lex_bus,
-            # self._apply_trafo_lv,
+            self._apply_trafo_lv,
         ]
 
         self.dim_topo = -1
@@ -481,6 +482,8 @@ class PowsyblBackend(Backend):
             warnings.simplefilter("ignore", FutureWarning)
             self.__pp_backend_initial_grid = self._grid.deepcopy()  # will be initialized in the "assert_grid_correct"
 
+        self.map_sub_invert = {v: k for k, v in self.map_sub.items()}
+
     def storage_deact_for_backward_comaptibility(self):
         self._init_private_attrs()
 
@@ -513,10 +516,6 @@ class PowsyblBackend(Backend):
             # TODO check if changing the target_v is the good way to do it, seems not I have to find a solution
             self._grid.update_generators(id=self.name_gen, target_v=prod_v.values)
 
-            # tmp_prod_v.iloc[prod_v.changed] = (
-            #     prod_v.values[prod_v.changed]  # / self.prod_pu_to_kv[prod_v.changed]
-            # )
-
         if np.any(load_p.changed):
             self._grid.update_loads(id=self.name_load, p0=load_p.values)
 
@@ -526,9 +525,12 @@ class PowsyblBackend(Backend):
         if self.n_storage > 0:
             # active setpoint
             #TODO wrong way to change storage p and topo look up to understand with loads and gens
-            tmp_stor_p = self._grid.get_batteries()["p"].values.astype(dt_float)
+            raise BackendError("Not ready for production")
+
             if np.any(storage.changed):
-                tmp_stor_p[storage.changed] = storage.values[storage.changed]
+                print(storage.changed)
+                print(storage.values)
+                self._grid.update_batteries(id=self.name_storage, )
 
             # topology of the storage
             stor_bus = backendAction.get_storages_bus()
@@ -553,109 +555,142 @@ class PowsyblBackend(Backend):
             shunt_p, shunt_q, shunt_bus = shunts__
 
             if np.any(shunt_p.changed):
-                self._grid.get_shunt_compensators()["p"].iloc[shunt_p.changed] = shunt_p.values[
-                    shunt_p.changed
-                ]
+                self._grid.update_shunt_compensators(id=self.name_shunt,
+                                                     p=shunt_p.values[shunt_p.changed])
 
             if np.any(shunt_q.changed):
-                self._grid.update_shunt_compensators(id=self._grid.get_shunt_compensators(), q=shunt_q.values[shunt_q.changed])
-                self._grid.get_shunt_compensators()["q"].iloc[shunt_q.changed] = shunt_q.values[
-                    shunt_q.changed
-                ]
+                self._grid.update_shunt_compensators(id=self.name_shunt, q=shunt_q.values[shunt_q.changed])
 
             if np.any(shunt_bus.changed):
                 sh_service = shunt_bus.values[shunt_bus.changed] != -1
                 self._grid.get_shunt_compensators()["connected"].iloc[shunt_bus.changed] = sh_service
                 chg_and_in_service = sh_service & shunt_bus.changed
                 # TODO have the backend understand the change of bus on a substation WIP
-                ppow.network.move_connectable(network=self._grid,
-                                              equipment_id=self._grid.get_shunt_compensators()['name'].iloc[shunt_bus.changed].values,
-                                              bus_origin_id=chg_and_in_service,
-                                              bus_destination_id=cls.local_bus_to_global(shunt_bus.values[chg_and_in_service],
-                                                                                         cls.shunt_to_subid[chg_and_in_service]))
 
+                for i in range(len(chg_and_in_service)):
+                    equipment_name = self.name_shunt[i]
+                    if chg_and_in_service[i]:
+                        self.move_buses(equipment_name=equipment_name,
+                                        bus_or=self._grid.get_shunt_compensators(all_attributes=True).loc[equipment_name]
+                                        ["bus_breaker_bus_id"],
+                                        bus_dest=int(cls.local_bus_to_global(shunt_bus.values[chg_and_in_service],
+                                                                         cls.shunt_to_subid[chg_and_in_service]))
+                                        )
         # i made at least a real change, so i implement it in the backend
         for id_el, new_bus in topo__:
             id_el_backend, id_topo, type_obj = self._big_topo_to_backend[id_el]
 
             if type_obj is not None:
                 # storage unit are handled elsewhere
+                print("Type de changement: ",type_obj)
                 self._type_to_bus_set[type_obj](new_bus, id_el_backend, id_topo)
 
     #TODO for all _apply_... (load,gen,lines...) change those functions to work with pypowsybl all have to be changed
     #TODO using move_connectable, I think they should be shorter then those below
     def _apply_load_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, self._init_bus_load[id_el_backend]
+            new_bus, id_el_backend
         )
         equipment_name = self.name_load[id_el_backend]
         if new_bus_backend >= 0:
-            pass
             # TODO handle the case when new_bus_backend >=0, there is a hack to do to change new_bus_backend to the good id
-            # self.move_buses(equipment_name=equipment_name,
-            #                 bus_or=self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"][equipment_name],
-            #                 bus_dest=new_bus_backend)
-            # self._grid.update_loads(id=equipment_name, connected=True)
+            self.move_buses(equipment_name=equipment_name,
+                            bus_or=self._grid.get_loads(all_attributes=True).loc[equipment_name][
+                                "bus_breaker_bus_id"],
+                            bus_dest=new_bus_backend)
+            self._grid.update_loads(id=equipment_name, connected=True)
         else:
             self._grid.update_loads(id=equipment_name, connected=False)
 
     def _apply_gen_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, self._init_bus_gen[id_el_backend]
+            new_bus, id_el_backend
         )
+        equipment_name = self.name_gen[id_el_backend]
         if new_bus_backend >= 0:
-            self._grid.gen["bus"].iat[id_el_backend] = new_bus_backend
-            self._grid.gen["in_service"].iat[id_el_backend] = True
-            # remember in this case slack bus is actually 2 generators for pandapower !
-            if (
-                    id_el_backend == (self._grid.gen.shape[0] - 1)
-                    and self._iref_slack is not None
-            ):
-                self._grid.ext_grid["bus"].iat[0] = new_bus_backend
+            self.move_buses(equipment_name=equipment_name,
+                            bus_or=self._grid.get_generators(all_attributes=True).loc[equipment_name]["bus_breaker_bus_id"],
+                            bus_dest=new_bus_backend)
+            self._grid.update_generators(id=equipment_name, connected=True)
         else:
-            self._grid.gen["in_service"].iat[id_el_backend] = False
-            self._grid.gen["bus"].iat[id_el_backend] = -1
+            self._grid.update_generators(id=equipment_name, connected=False)
             # in this case the slack bus cannot be disconnected
 
     def _apply_lor_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, self._init_bus_lor[id_el_backend]
+            new_bus, id_el_backend
         )
         self.change_bus_powerline_or(id_el_backend, new_bus_backend)
 
     def change_bus_powerline_or(self, id_powerline_backend, new_bus_backend):
         #TODO handle the case when new_bus_backend >=0, there is a hack to do to change new_bus_backend to the good id
+        equipment_name = self.name_line[id_powerline_backend]
         if new_bus_backend >= 0:
-            pass
-            # self.move_buses(self.name_line[id_powerline_backend],
-            #                 self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"][self.name_line[id_powerline_backend]],
-            #                 new_bus_backend)
-            # self._grid.update_lines(id=self.name_line[id_powerline_backend], connected1=True)
+            self.move_buses(equipment_name=equipment_name,
+                            bus_or=self._grid.get_lines(all_attributes=True).loc[equipment_name][
+                                "bus_breaker_bus1_id"],
+                            bus_dest=new_bus_backend)
+            self._grid.update_lines(id=equipment_name, connected1=True)
         else:
             self._grid.update_lines(id=self.name_line[id_powerline_backend], connected1=False)
 
     def _apply_lex_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, self._init_bus_lex[id_el_backend]
+            new_bus, id_el_backend
         )
         self.change_bus_powerline_ex(id_el_backend, new_bus_backend)
 
     def change_bus_powerline_ex(self, id_powerline_backend, new_bus_backend):
         # TODO handle the case when new_bus_backend >=0, there is a hack to do to change new_bus_backend to the good id
+        equipment_name = self.name_line[id_powerline_backend]
         if new_bus_backend >= 0:
-            pass
-            # self.move_buses(self.name_line[id_powerline_backend],
-            #                 self._grid.get_lines(all_attributes=True)["bus_breaker_bus2_id"][id_powerline_backend],
-            #                 new_bus_backend)
-            # self._grid.update_lines(id=self.name_line[id_powerline_backend], connected2=True)
+            self.move_buses(equipment_name=equipment_name,
+                            bus_or=self._grid.get_lines(all_attributes=True).loc[equipment_name][
+                                "bus_breaker_bus2_id"],
+                            bus_dest=new_bus_backend)
+            self._grid.update_lines(id=equipment_name, connected2=True)
         else:
             self._grid.update_lines(id=self.name_line[id_powerline_backend], connected2=False)
 
     def _apply_trafo_hv(self, new_bus, id_el_backend, id_topo):
+        print("id_topo : ", id_topo)
+        print("id_el_backend : ", id_el_backend)
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, self._init_bus_lor[id_el_backend]
+            new_bus, id_el_backend
         )
-        self.change_bus_trafo_hv(id_topo, new_bus_backend)
+        self.change_bus_trafo_hv(id_el_backend, new_bus_backend)
+
+    def change_bus_trafo_hv(self, id_powerline_backend, new_bus_backend):
+        # TODO by convention I think that hv are connected on bus_1 but need to be checked and otherwise do some improvment
+        print(self.name_line)
+        print(new_bus_backend)
+        print(id_powerline_backend)
+        print(self.name_line[id_powerline_backend])
+        equipment_name = self.name_line[id_powerline_backend]
+        if new_bus_backend >= 0:
+            self.move_buses(equipment_name=equipment_name,
+                            bus_or=self._grid.get_2_windings_transformers(all_attributes=True).loc[equipment_name][
+                                "bus_breaker_bus1_id"],
+                            bus_dest=new_bus_backend)
+            self._grid.update_2_windings_transformers(id=equipment_name, connected1=True)
+        else:
+            self._grid.update_2_windings_transformers(id=self.name_line[id_powerline_backend], connected1=False)
+
+    def _apply_trafo_lv(self, new_bus, id_el_backend, id_topo):
+        new_bus_backend = type(self).local_bus_to_global_int(
+            new_bus, id_el_backend
+        )
+        self.change_bus_trafo_lv(id_el_backend, new_bus_backend)
+
+    def change_bus_trafo_lv(self, id_powerline_backend, new_bus_backend):
+        equipment_name = self.name_line[id_powerline_backend]
+        if new_bus_backend >= 0:
+            self.move_buses(equipment_name=equipment_name,
+                            bus_or=self._grid.get_2_windings_transformers(all_attributes=True).loc[equipment_name]["bus_breaker_bus2_id"],
+                            bus_dest=new_bus_backend)
+            self._grid.update_2_windings_transformers(id=equipment_name, connected2=True)
+        else:
+            self._grid.update_2_windings_transformers(id=self.name_line[id_powerline_backend], connected2=False)
 
     def runpf(self, is_dc=False):
         nb_bus = self.get_nb_active_bus()
@@ -750,18 +785,18 @@ class PowsyblBackend(Backend):
                 #                     self.load_v[l_id] = self.prod_v[g_id]
                 #                     break
 
-                self.p_or[:] = self._aux_get_line_info("p1", "p1", "p1")
-                self.q_or[:] = self._aux_get_line_info("q1", "q1", "q1")
+                self.p_or[:] = self._aux_get_line_info("p1", "p1")
+                self.q_or[:] = self._aux_get_line_info("q1", "q1")
                 self.v_or[:] = self._aux_get_voltage_info(self._grid.get_branches()['bus1_id'])
-                self.a_or[:] = self._aux_get_line_info("i1", "i1", "i1")
+                self.a_or[:] = self._aux_get_line_info("i1", "i1")
                 self.theta_or[:] = self._aux_get_theta_info(self._grid.get_branches()['bus1_id'])
                 self.a_or[~np.isfinite(self.a_or)] = 0.0
                 self.v_or[~np.isfinite(self.v_or)] = 0.0
 
-                self.p_ex[:] = self._aux_get_line_info("p2", "p2", "p2")
-                self.q_ex[:] = self._aux_get_line_info("q2", "q2", "q2")
+                self.p_ex[:] = self._aux_get_line_info("p2", "p2")
+                self.q_ex[:] = self._aux_get_line_info("q2", "q2")
                 self.v_ex[:] = self._aux_get_voltage_info(self._grid.get_branches()['bus2_id'])
-                self.a_ex[:] = self._aux_get_line_info("i2", "i2", "i2")
+                self.a_ex[:] = self._aux_get_line_info("i2", "i2")
                 self.theta_ex[:] = self._aux_get_theta_info(self._grid.get_branches()['bus2_id'])
                 self.a_ex[~np.isfinite(self.a_ex)] = 0.0
                 self.v_ex[~np.isfinite(self.v_ex)] = 0.0
@@ -988,9 +1023,9 @@ class PowsyblBackend(Backend):
 
     def generators_info(self):
         return (
-            self.prod_p,
-            self.prod_q,
-            self.prod_v,
+            copy.deepcopy(self.prod_p),
+            copy.deepcopy(self.prod_q),
+            copy.deepcopy(self.prod_v),
         )
 
     def _gens_info(self):
@@ -1016,7 +1051,7 @@ class PowsyblBackend(Backend):
         #             self._iref_slack, 2
         #         ]
 
-        return prod_p, prod_q, prod_v, prod_theta
+        return copy.deepcopy(prod_p), copy.deepcopy(prod_q), copy.deepcopy(prod_v), copy.deepcopy(prod_theta)
 
     def loads_info(self):
         return (
@@ -1032,31 +1067,31 @@ class PowsyblBackend(Backend):
         # load_v = self._grid.get_buses()['v_mag'][self._grid.get_loads()['bus_id'].values].values.astype(dt_float)
         load_theta = self._aux_get_theta_info(self._grid.get_loads()['bus_id'])
         # load_theta = self._grid.get_buses()['v_angle'][self._grid.get_loads()['bus_id'].values].values.astype(dt_float)
-        return load_p, load_q, load_v, load_theta
+        return copy.deepcopy(load_p), copy.deepcopy(load_q), copy.deepcopy(load_v), copy.deepcopy(load_theta)
 
     def lines_or_info(self):
         return (
-            self.p_or,
-            self.q_or,
-            self.v_or,
-            self.a_or
+            copy.deepcopy(self.p_or),
+            copy.deepcopy(self.q_or),
+            copy.deepcopy(self.v_or),
+            copy.deepcopy(self.a_or)
         )
 
     def lines_ex_info(self):
         return (
-            self.p_ex,
-            self.q_ex,
-            self.v_ex,
-            self.a_ex
+            copy.deepcopy(self.p_ex),
+            copy.deepcopy(self.q_ex),
+            copy.deepcopy(self.v_ex),
+            copy.deepcopy(self.a_ex)
         )
 
     def get_theta(self):
         return (
-            self.theta_or,
-            self.theta_ex,
-            self.load_theta,
-            self.gen_theta,
-            self.storage_theta,
+            copy.deepcopy(self.theta_or),
+            copy.deepcopy(self.theta_ex),
+            copy.deepcopy(self.load_theta),
+            copy.deepcopy(self.gen_theta),
+            copy.deepcopy(self.storage_theta),
         )
 
     def assert_grid_correct(self):
@@ -1069,7 +1104,7 @@ class PowsyblBackend(Backend):
         """
         super().assert_grid_correct()
 
-    def _aux_get_line_info(self, colname1, colname2, colname3):
+    def _aux_get_line_info(self, colname1, colname2):
         res = np.concatenate(
             (
                 self._grid.get_lines()[colname1].values,
@@ -1269,7 +1304,12 @@ class PowsyblBackend(Backend):
     def move_buses(self, equipment_name, bus_or, bus_dest):
         #TODO handle properly the switch of buses, initial information are the type of element to change, the bus_or and
         #TODO and bus_dest in Grid2op way
-        ppow.network.move_connectable(network=self._grid, equipment_id=equipment_name, bus_origin_id=bus_or, bus_destination_id=bus_dest)
+        print(bus_dest)
+        print(self.map_sub_invert)
+        real_bus_dest = self.map_sub_invert[bus_dest]
+        print(real_bus_dest)
+        print(bus_or)
+        ppow.network.move_connectable(network=self._grid, equipment_id=equipment_name, bus_origin_id=bus_or, bus_destination_id=real_bus_dest)
 
     def copy(self):
         """
@@ -1301,6 +1341,8 @@ class PowsyblBackend(Backend):
         res.lines_or_pu_to_kv = copy.deepcopy(self.lines_or_pu_to_kv)
         res.lines_ex_pu_to_kv = copy.deepcopy(self.lines_ex_pu_to_kv)
         res.storage_pu_to_kv = copy.deepcopy(self.storage_pu_to_kv)
+        res.map_sub = copy.deepcopy(self.map_sub)
+        res.map_sub_invert = copy.deepcopy(self.map_sub_invert)
 
         res.p_or = copy.deepcopy(self.p_or)
         res.q_or = copy.deepcopy(self.q_or)
