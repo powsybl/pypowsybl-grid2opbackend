@@ -368,3 +368,6 @@ test_multi_step_for.py
 
 # profiling files
 **.prof
+
+# Ignore figures
+*.svg
