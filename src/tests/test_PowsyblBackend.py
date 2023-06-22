@@ -13,10 +13,9 @@ import numpy as np
 import os
 from grid2op import make
 from pathlib import Path
-# from grid2op.tests.helper_path_test import PATH_DATA_TEST_PP, PATH_DATA_TEST
 from Backend.PowsyblBackend import PowsyblBackend
 
-
+from grid2op.tests.helper_path_test import PATH_DATA_TEST_PP, PATH_DATA_TEST
 from grid2op.tests.helper_path_test import HelperTests
 from BaseBackendTestPyPowsybl import BaseTestNames
 from BaseBackendTestPyPowsybl import BaseTestLoadingCase
@@ -37,8 +36,10 @@ from grid2op.tests.BaseBackendTest import BaseTestStorageAction
 test_dir = Path(__file__).parent.absolute()
 implementation_dir = os.fspath(test_dir.parent.absolute())
 data_dir = os.path.abspath(os.path.join(implementation_dir, "data_test"))
-PATH_DATA_TEST = data_dir
+PATH_DATA_TEST_PYPOW = data_dir
 
+PATH_DATA_TEST_INIT = PATH_DATA_TEST
+PATH_DATA_TEST = PATH_DATA_TEST_PP
 
 import warnings
 
@@ -52,10 +53,10 @@ class TestLoadingCase(HelperTests, BaseTestLoadingCase):
         )
 
     def get_path(self):
-        return PATH_DATA_TEST
+        return PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
 
     def get_casefile(self):
-        return "test_case14.xiidm"#"case14_realistic_test.mat"
+        return "test_case14.json" #"test_case14.xiidm" #"case14_realistic_test.mat"
 #
 # class TestLoadingCase(HelperTests, BaseTestLoadingCase):
 #     def make_backend(self, detailed_infos_for_cascading_failures=False):
@@ -106,10 +107,10 @@ class TestLoadingBackendFunc(HelperTests, BaseTestLoadingBackendFunc):
         )
 
     def get_path(self):
-        return PATH_DATA_TEST
+        return PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
 
     def get_casefile(self):
-        return "test_case300.xiidm"
+        return "test_case14.json"  #"test_case14.xiidm"
 
 
 class TestTopoAction(HelperTests, BaseTestTopoAction):
@@ -126,10 +127,10 @@ class TestTopoAction(HelperTests, BaseTestTopoAction):
         )
 
     def get_path(self):
-        return PATH_DATA_TEST
+        return PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
 
     def get_casefile(self):
-        return "test_case300.xiidm"
+        return "test_case14.json"  #"test_case14.xiidm"
 
 if __name__ == "__main__":
     unittest.main()
