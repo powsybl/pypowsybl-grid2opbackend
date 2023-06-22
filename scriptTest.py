@@ -1,13 +1,33 @@
 import grid2op
-from grid2op.Agent import DoNothingAgent
+from grid2op.Agent import DoNothingAgent, OneChangeThenNothing
 from grid2op.Backend import PandaPowerBackend
 from grid2op.PlotGrid import PlotMatplot, PlotPlotly
+from grid2op.Runner import Runner
 from tqdm import tqdm
 
 from src.Backend.PowsyblBackend import PowsyblBackend
 
 
-def run(backend="powsybl", n_iter=1, PlotHelper=PlotMatplot):
+def run_onechange(backend="powsybl", acts_dict_=None):
+
+    if backend == "powsybl":
+        env = grid2op.make("src\data_test\l2rpn_case14_sandbox_Pypowsybl",
+                       backend=PowsyblBackend(detailed_infos_for_cascading_failures=False))
+    else:
+        env = grid2op.make("l2rpn_case14_sandbox", backend=PandaPowerBackend())
+
+    env.seed(42)
+    for act_as_dict in acts_dict_:
+        # generate the proper class that will perform the first action (encoded by {}) in acts_dict_
+        agent_class = OneChangeThenNothing.gen_next(act_as_dict)
+
+        # start a runner with this agent
+        runner = Runner(**env.get_params_for_runner(), agentClass=agent_class)
+        # run 2 episode with it
+        res_2 = runner.run(nb_episode=1, pbar=True)
+
+
+def run_donoting(backend="powsybl", n_iter=1, PlotHelper=PlotMatplot):
 
     if backend == "powsybl":
         env = grid2op.make("src\data_test\l2rpn_case14_sandbox_Pypowsybl",
@@ -40,7 +60,6 @@ def run(backend="powsybl", n_iter=1, PlotHelper=PlotMatplot):
                 line_info="p",
                 gen_info="p"
             )
-
             if isinstance(plot_helper, PlotPlotly):
                 fig.write_html(f"Backend {backend} Observation n°{nb_step}.html")
                 fig.update_layout(title=f"Backend {backend} Observation n°{nb_step}")
@@ -51,13 +70,14 @@ def run(backend="powsybl", n_iter=1, PlotHelper=PlotMatplot):
                 env.backend._grid.write_network_area_diagram_svg(f"Pyspowsybl Backend {backend} Observation n°{nb_step}.svg")
             if nb_step == n_iter:
                 break
-
     print("Number of timesteps computed: {}".format(nb_step))
     print("Total maximum number of timesteps possible: {}".format(env.chronics_handler.max_timestep()))
 
 
 if __name__ == "__main__":
+    acts_dict_ = [{}, {"set_line_status": [(0, -1)]}]
 
-    backends = ["powsybl", "pandapower"]
+    backends = ["pandapower", "pypowsybls"]
     for backend in backends:
-        run(backend=backend, n_iter=50)
+        run_onechange(backend, acts_dict_)
+
