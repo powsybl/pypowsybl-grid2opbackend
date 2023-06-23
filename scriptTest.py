@@ -109,12 +109,28 @@ def run_donoting(backend="powsybl", n_iter=1, PlotHelper=PlotMatplot):
 
 
 if __name__ == "__main__":
+
     acts_dict_ = {
         # "Donothing": {},
         # "OneChange_disconnection": {"set_line_status": [(0, -1)]},
         # "OneChange_change_bus": {"set_bus": {"lines_or_id": [(3, 2), (4, 2)], "loads_id": [(0, 2)]}},#, "generators_id": [(0, 2)]}}#{"generators_id": [(0, 2)]}}# {"lines_or_id": [(3, 2), (4, 2)],"loads_id": [(0, 2)]}}#,"generators_id": [(0, 2)]}}
         "OneRedispatch": {"redispatch":  [(1, -1.3)]}
+        "OneChange_disconnection": {"set_line_status": [(0, -1)]},
+        "OneChange_set_bus": {
+            "set_bus": {
+                "lines_or_id": [(3, 2), (4, 2)],
+                "loads_id": [(0, 2)],
+                "generators_id": [(0, 2)]
+            },
+        },
+        "OneChange_change_bus": {
+            "change_bus": {
+                "lines_or_id": [3, 4],
+                "loads_id": [0],
+                "generators_id": [0]
+            },
+        }
     }
     backends = ["pypowsybl"]#, "pandapower"]
     for backend in backends:
-        results = run_onechange(backend, acts_dict_)
+        results = run_onechange(backend, acts_dict_, nb_of_iterations=3)
