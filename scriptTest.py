@@ -4,6 +4,7 @@ from grid2op.Agent import DoNothingAgent, OneChangeThenNothing
 from grid2op.Backend import PandaPowerBackend
 from grid2op.PlotGrid import PlotMatplot, PlotPlotly
 from grid2op.Runner import Runner
+from grid2op.Episode import EpisodeData
 from tqdm import tqdm
 
 from src.Backend.PowsyblBackend import PowsyblBackend
@@ -13,12 +14,12 @@ def run_onechange(backend="powsybl", acts_dict_=None, nb_of_iterations=5, PlotHe
     p = Parameters()
     p.NO_OVERFLOW_DISCONNECTION = True
     print(f"Backend {backend} passed to run_onechange")
-    if backend == "powsybl":
+    if backend == "pypowsybl":
         print(f"Backend {backend} used")
         env = grid2op.make(
             "src\data_test\l2rpn_case14_sandbox_Pypowsybl",
             backend=PowsyblBackend(detailed_infos_for_cascading_failures=False),
-            param=p
+            # param=p
     )
     else:
         print(f"Backend {backend} used")
@@ -43,6 +44,7 @@ def run_onechange(backend="powsybl", acts_dict_=None, nb_of_iterations=5, PlotHe
             line_info="p",
             gen_info="p"
         )
+
         if isinstance(plot_helper, PlotPlotly):
             fig.write_html(f"Backend {backend} Observation n°{1} - Agent {Agent_name}.html")
             fig.update_layout(title=f"Backend {backend} Observation n°{1} - Agent {Agent_name}")
@@ -50,12 +52,18 @@ def run_onechange(backend="powsybl", acts_dict_=None, nb_of_iterations=5, PlotHe
             fig.suptitle(f"Backend {backend} Observation n°{1} - Agent {Agent_name}")
             fig.savefig(f"Grid2Op Backend {backend} Observation n°{1} - Agent {Agent_name}.svg")
         results[Agent_name] = episode_data
+
+    for elem in episode_data.observations:
+        print(elem.is_alarm_illegal)
+        print(elem.topo_vect)
+
+        # you can do something with it now
     return results
 
 
 def run_donoting(backend="powsybl", n_iter=1, PlotHelper=PlotMatplot):
 
-    if backend == "powsybl":
+    if backend == "pypowsybl":
         env = grid2op.make("src\data_test\l2rpn_case14_sandbox_Pypowsybl",
                        backend=PowsyblBackend(detailed_infos_for_cascading_failures=False))
     else:
@@ -102,10 +110,11 @@ def run_donoting(backend="powsybl", n_iter=1, PlotHelper=PlotMatplot):
 
 if __name__ == "__main__":
     acts_dict_ = {
-        "Donothing": {},
-        "OneChange_disconnection": {"set_line_status": [(0, -1)]},
-        "OneChange_change_bus":  {"set_bus": {"lines_or_id": [(0, 2)]}}
+        # "Donothing": {},
+        # "OneChange_disconnection": {"set_line_status": [(0, -1)]},
+        # "OneChange_change_bus": {"set_bus": {"lines_or_id": [(3, 2), (4, 2)], "loads_id": [(0, 2)]}},#, "generators_id": [(0, 2)]}}#{"generators_id": [(0, 2)]}}# {"lines_or_id": [(3, 2), (4, 2)],"loads_id": [(0, 2)]}}#,"generators_id": [(0, 2)]}}
+        "OneRedispatch": {"redispatch":  [(1, -1.3)]}
     }
-    backends = ["pandapower", "pypowsybl"]
+    backends = ["pypowsybl"]#, "pandapower"]
     for backend in backends:
         results = run_onechange(backend, acts_dict_)
