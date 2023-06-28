@@ -1180,6 +1180,12 @@ class PowsyblBackend(Backend):
         return res
 
     def _return_real_lines_transfo(self):
+        """
+        INTERNAL
+
+        Allows to retrieve the same order as in pandapower with json files, because some transformers (the one with low
+        voltage and not any tap change possible) are condidered as lines by pypowsybl
+        """
         return self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0], \
             pd.concat([self._grid.get_2_windings_transformers(all_attributes=True),
                        self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0]],
