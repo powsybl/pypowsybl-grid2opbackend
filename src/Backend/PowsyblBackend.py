@@ -199,7 +199,7 @@ class PowsyblBackend(Backend):
 
         df_lines, df_transfo = self._return_real_lines_transfo()
         self.name_line = np.array(
-            df_lines["name"].index.to_list()+
+            df_lines["name"].index.to_list() +
             df_transfo["name"].index.to_list()
             # self._grid.get_lines()["name"].index.to_list() +
             # self._grid.get_2_windings_transformers()["name"].index.to_list()
@@ -232,8 +232,8 @@ class PowsyblBackend(Backend):
         for elem in self._grid.get_voltage_levels()['name'].index.values:
             list_buses = list_buses+list(self._grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index)
 
-        for i in range(len(list_buses)):
-            self.map_sub[list_buses[i]] = i
+        for i, bus in enumerate(list_buses):
+            self.map_sub[bus] = i
 
         # Doubling the buses for Grid2op necessities
         self._double_buses()
@@ -298,36 +298,36 @@ class PowsyblBackend(Backend):
         
         # Allows us to map the id of each substation in Grid2op (an integer) with the name of each corresponding
         add_map = {}
-        for elem in self.map_sub.keys():
-            add_map[elem + BUS_EXTENSION] = self.map_sub[elem] + self.__nb_bus_before
+        for bus, bus_position_id in self.map_sub.items():
+            add_map[bus + BUS_EXTENSION] = bus_position_id + self.__nb_bus_before
         self.map_sub.update(add_map)
 
         # For lines & transfos
         df_lines, df_transfo = self._return_real_lines_transfo()
         self.line_or_to_subid = np.array(
-            [self.map_sub[i] for i in df_lines["bus_breaker_bus1_id"].to_list()] +
-            [self.map_sub[i] for i in df_transfo["bus_breaker_bus1_id"].to_list()])
+            [self.map_sub[i] for i in df_lines["bus_breaker_bus1_id"].values] +
+            [self.map_sub[i] for i in df_transfo["bus_breaker_bus1_id"].values])
             # [self.map_sub[i] for i in self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].to_list()] +
             # [self.map_sub[i] for i in self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus1_id"].to_list()]
         self.line_ex_to_subid = np.array(
-            [self.map_sub[i] for i in df_lines["bus_breaker_bus2_id"].to_list()]+
-            [self.map_sub[i] for i in df_transfo["bus_breaker_bus2_id"].to_list()]
+            [self.map_sub[i] for i in df_lines["bus_breaker_bus2_id"].values]+
+            [self.map_sub[i] for i in df_transfo["bus_breaker_bus2_id"].values]
             # [self.map_sub[i] for i in self._grid.get_lines(all_attributes=True)["bus_breaker_bus2_id"].to_list()] +
             # [self.map_sub[i] for i in self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus2_id"].to_list()]
         )
 
-        for i in range(len(self.line_or_to_subid)):
-            self.sub_info[self.line_or_to_subid[i]] += 1
-            self.sub_info[self.line_ex_to_subid[i]] += 1
-            self.line_or_to_sub_pos[i] = pos_already_used[self.line_or_to_subid[i]]
-            self.line_ex_to_sub_pos[i] = pos_already_used[self.line_ex_to_subid[i]]
-            pos_already_used[self.line_or_to_subid[i]] += 1
-            pos_already_used[self.line_ex_to_subid[i]] += 1
+        for i, (line_or_pos_id, line_ex_pos_id) in enumerate(zip(self.line_or_to_subid, self.line_ex_to_subid)):
+            self.sub_info[line_or_pos_id] += 1
+            self.sub_info[line_ex_pos_id] += 1
+            self.line_or_to_sub_pos[i] = pos_already_used[line_or_pos_id]
+            self.line_ex_to_sub_pos[i] = pos_already_used[line_ex_pos_id]
+            pos_already_used[line_or_pos_id] += 1
+            pos_already_used[line_ex_pos_id] += 1
 
-        print("line_or_to_subid: ",self.line_or_to_subid)
-        print("line_ex_to_subid: ",self.line_ex_to_subid)
-        print("line_or_to_sub_pos: ",self.line_or_to_sub_pos)
-        print("line_ex_to_sub_pos: ",self.line_ex_to_sub_pos)
+        print("line_or_to_subid: ", self.line_or_to_subid)
+        print("line_ex_to_subid: ", self.line_ex_to_subid)
+        print("line_or_to_sub_pos: ", self.line_or_to_sub_pos)
+        print("line_ex_to_sub_pos: ", self.line_ex_to_sub_pos)
 
         self._number_true_line = copy.deepcopy(self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0].shape[0])
 
@@ -336,10 +336,10 @@ class PowsyblBackend(Backend):
             [self.map_sub[i] for i in self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].to_list()]
         )
 
-        for i in range(len(self.gen_to_subid)):
-            self.sub_info[self.gen_to_subid[i]] += 1
-            self.gen_to_sub_pos[i] = pos_already_used[self.gen_to_subid[i]]
-            pos_already_used[self.gen_to_subid[i]] += 1
+        for i, gen_subid in enumerate(self.gen_to_subid):
+            self.sub_info[gen_subid] += 1
+            self.gen_to_sub_pos[i] = pos_already_used[gen_subid]
+            pos_already_used[gen_subid] += 1
         print("gen_to_subid: ", self.gen_to_subid)
         print("gen_to_sub_pos: ", self.gen_to_sub_pos)
 
@@ -349,10 +349,10 @@ class PowsyblBackend(Backend):
             [self.map_sub[i] for i in self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].to_list()]
         )
 
-        for i in range(len(self.load_to_subid)):
-            self.sub_info[self.load_to_subid[i]] += 1
-            self.load_to_sub_pos[i] = pos_already_used[self.load_to_subid[i]]
-            pos_already_used[self.load_to_subid[i]] += 1
+        for i, load_subid in enumerate(self.load_to_subid):
+            self.sub_info[load_subid] += 1
+            self.load_to_sub_pos[i] = pos_already_used[load_subid]
+            pos_already_used[load_subid] += 1
         print("load_to_subid: ", self.load_to_subid)
         print("load_to_sub_pos: ", self.load_to_sub_pos)
 
