@@ -177,7 +177,7 @@ class PowsyblBackend(Backend):
         #         )
 
         self.__nb_bus_before = self._grid.get_buses().shape[0]
-        self.__nb_powerline = self._grid.get_lines().shape[0]
+        self.__nb_powerline = copy.deepcopy(self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0].shape[0])
         self._init_bus_load = self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].values
         self._init_bus_gen = self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].values
         self._init_bus_lor = self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].values
@@ -493,8 +493,6 @@ class PowsyblBackend(Backend):
         self.dim_topo = np.sum(self.sub_info)
         self._compute_pos_big_topo()
 
-
-
         self.line_status[:] = self._get_line_status()
         self._topo_vect = self._get_topo_vect()
         self.tol = 1e-5  # this is NOT the pandapower tolerance !!!! this is used to check if a storage unit
@@ -610,11 +608,9 @@ class PowsyblBackend(Backend):
                 print("Type de changement: ", self._type_to_bus_set[type_obj])
                 self._type_to_bus_set[type_obj](new_bus, id_el_backend, id_topo)
 
-    #TODO for all _apply_... (load,gen,lines...) change those functions to work with pypowsybl all have to be changed
-    #TODO using move_connectable, I think they should be shorter then those below
     def _apply_load_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, id_el_backend
+            new_bus, self.map_sub[self._init_bus_load[id_el_backend]]
         )
         equipment_name = self.name_load[id_el_backend]
         if new_bus_backend >= 0:
@@ -630,7 +626,7 @@ class PowsyblBackend(Backend):
 
     def _apply_gen_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, id_el_backend
+            new_bus, self.map_sub[self._init_bus_gen[id_el_backend]]
         )
         equipment_name = self.name_gen[id_el_backend]
         if new_bus_backend >= 0:
@@ -646,12 +642,11 @@ class PowsyblBackend(Backend):
 
     def _apply_lor_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, id_el_backend
+            new_bus, self.map_sub[self._init_bus_lor[id_el_backend]]
         )
         self.change_bus_powerline_or(id_el_backend, new_bus_backend)
 
     def change_bus_powerline_or(self, id_powerline_backend, new_bus_backend):
-        #TODO handle the case when new_bus_backend >=0, there is a hack to do to change new_bus_backend to the good id
         equipment_name = self.name_line[id_powerline_backend]
         if new_bus_backend >= 0:
             print("Initial bus: ", self._grid.get_lines(all_attributes=True).loc[equipment_name]["bus_breaker_bus1_id"])
@@ -666,12 +661,11 @@ class PowsyblBackend(Backend):
 
     def _apply_lex_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, id_el_backend
+            new_bus, self.map_sub[self._init_bus_lex[id_el_backend]]
         )
         self.change_bus_powerline_ex(id_el_backend, new_bus_backend)
 
     def change_bus_powerline_ex(self, id_powerline_backend, new_bus_backend):
-        # TODO handle the case when new_bus_backend >=0, there is a hack to do to change new_bus_backend to the good id
         equipment_name = self.name_line[id_powerline_backend]
         if new_bus_backend >= 0:
             print("Initial bus: ",self._grid.get_lines(all_attributes=True).loc[equipment_name]["bus_breaker_bus2_id"])
@@ -685,10 +679,8 @@ class PowsyblBackend(Backend):
             self._grid.update_lines(id=equipment_name, connected2=False)
 
     def _apply_trafo_hv(self, new_bus, id_el_backend, id_topo):
-        print("id_topo : ", id_topo)
-        print("id_el_backend : ", id_el_backend)
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, id_el_backend
+            new_bus, self.map_sub[self._init_bus_lor[id_el_backend]]
         )
         self.change_bus_trafo_hv(id_el_backend, new_bus_backend)
 
@@ -727,13 +719,11 @@ class PowsyblBackend(Backend):
             elif type == "TWO_WINDINGS_TRANSFORMER":
                 self._grid.update_2_windings_transformers(id=equipment_name, connected1=False)
             else:
-                print(type)
-                print(type=="LINE")
                 raise BackendError(f"The elements named {equipment_name} is not a transfo")
 
     def _apply_trafo_lv(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, id_el_backend
+            new_bus, self.map_sub[self._init_bus_lex[id_el_backend]]
         )
         self.change_bus_trafo_lv(id_el_backend, new_bus_backend)
 
@@ -1278,110 +1268,6 @@ class PowsyblBackend(Backend):
         L_voltage_id = df['voltage_level_id'].to_list()
         for i in range(len(L)):
             self._grid.create_buses(id=L[i] + BUS_EXTENSION, voltage_level_id=L_voltage_id[i], name=df['name'][i])
-
-    @classmethod
-    def local_bus_to_global(cls, local_bus, to_sub_id):
-        """This function translate "local bus" whose id are in a substation, to "global bus id" whose
-        id are consistent for the whole grid.
-
-        Be carefull, when using this function, you might end up with deactivated bus: *eg* if you have an element on bus
-        with global id 1 and another on bus with global id 42 you might not have any element on bus with
-        global id 41 or 40 or 39 or etc.
-
-        .. note::
-            Typically, "local bus" are numbered 1 or 2. They represent the id of the busbar to which the element
-            is connected IN its substation.
-
-            On the other hand, the "global bus" are numberd, 0, 1, 2, 3, ..., 2 * self.n_sub. They represent some kind of
-            "universal" labelling of the busbars of all the grid. For example, substation 0 might have busbar `0` and `self.n_sub`,
-            substation 1 have busbar `1` and `self.n_sub + 1` etc.
-            [on_bus_1]
-            Local and global bus id represents the same thing. The difference comes down to convention.
-        """
-        global_bus = 1 * local_bus  # make a copy
-        on_bus_1 = global_bus == 1
-        on_bus_2 = global_bus == 2
-        global_bus[on_bus_1] = to_sub_id[on_bus_1]
-        global_bus[on_bus_2] = to_sub_id[on_bus_2] + cls.n_sub
-        return global_bus
-
-    # @classmethod
-    # def local_bus_to_global_int(cls, local_bus, to_sub_id):
-    #     """This function translate "local bus" whose id are in a substation, to "global bus id" whose
-    #     id are consistent for the whole grid.
-    #
-    #     Be carefull, when using this function, you might end up with deactivated bus: *eg* if you have an element on bus
-    #     with global id 1 and another on bus with global id 42 you might not have any element on bus with
-    #     global id 41 or 40 or 39 or etc.
-    #
-    #     .. note::
-    #         Typically, "local bus" are numbered 1 or 2. They represent the id of the busbar to which the element
-    #         is connected IN its substation.
-    #
-    #         On the other hand, the "global bus" are numberd, 0, 1, 2, 3, ..., 2 * self.n_sub. They represent some kind of
-    #         "universal" labelling of the busbars of all the grid. For example, substation 0 might have busbar `0` and `self.n_sub`,
-    #         substation 1 have busbar `1` and `self.n_sub + 1` etc.
-    #
-    #         Local and global bus id represents the same thing. The difference comes down to convention.
-    #
-    #     .. note::
-    #         This is the "non vectorized" version that applies only on integers.
-    #     """
-    #     if local_bus == 1:
-    #         return to_sub_id
-    #     elif local_bus == 2:
-    #         return to_sub_id + cls.n_sub
-    #     return -1
-
-    # @classmethod
-    # def global_bus_to_local(cls, global_bus, to_sub_id):
-    #     """This function translate "local bus" whose id are in a substation, to "global bus id" whose
-    #     id are consistent for the whole grid.
-    #
-    #     Be carefull, when using this function, you might end up with deactivated bus: *eg* if you have an element on bus
-    #     with global id 1 and another on bus with global id 42 you might not have any element on bus with
-    #     global id 41 or 40 or 39 or etc.
-    #
-    #     .. note::
-    #         Typically, "local bus" are numbered 1 or 2. They represent the id of the busbar to which the element
-    #         is connected IN its substation.
-    #
-    #         On the other hand, the "global bus" are numberd, 0, 1, 2, 3, ..., 2 * self.n_sub. They represent some kind of
-    #         "universal" labelling of the busbars of all the grid. For example, substation 0 might have busbar `0` and `self.n_sub`,
-    #         substation 1 have busbar `1` and `self.n_sub + 1` etc.
-    #
-    #         Local and global bus id represents the same thing. The difference comes down to convention.
-    #     """
-    #     res = 1 * global_bus
-    #     res[global_bus < cls.n_sub] = 1
-    #     res[global_bus >= cls.n_sub] = 2
-    #     res[global_bus == -1] = -1
-    #     return res
-    #
-    # @classmethod
-    # def global_bus_to_local_int(cls, global_bus, to_sub_id):
-    #     """This function translate "local bus" whose id are in a substation, to "global bus id" whose
-    #     id are consistent for the whole grid.
-    #
-    #     Be carefull, when using this function, you might end up with deactivated bus: *eg* if you have an element on bus
-    #     with global id 1 and another on bus with global id 42 you might not have any element on bus with
-    #     global id 41 or 40 or 39 or etc.
-    #
-    #     .. note::
-    #         Typically, "local bus" are numbered 1 or 2. They represent the id of the busbar to which the element
-    #         is connected IN its substation.
-    #
-    #         On the other hand, the "global bus" are numberd, 0, 1, 2, 3, ..., 2 * self.n_sub. They represent some kind of
-    #         "universal" labelling of the busbars of all the grid. For example, substation 0 might have busbar `0` and `self.n_sub`,
-    #         substation 1 have busbar `1` and `self.n_sub + 1` etc.
-    #
-    #         Local and global bus id represents the same thing. The difference comes down to convention.
-    #     """
-    #     if global_bus < cls.n_sub:
-    #         return 1
-    #     if global_bus >= cls.n_sub:
-    #         return 2
-    #     return -1
 
     def move_buses(self, equipment_name, bus_or, bus_dest):
         #TODO handle properly the switch of buses, initial information are the type of element to change, the bus_or and
