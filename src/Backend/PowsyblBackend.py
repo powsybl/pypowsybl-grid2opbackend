@@ -177,7 +177,7 @@ class PowsyblBackend(Backend):
         #         )
 
         self.__nb_bus_before = self._grid.get_buses().shape[0]
-        self.__nb_powerline = self._grid.get_lines().shape[0]
+        self.__nb_powerline = copy.deepcopy(self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0].shape[0])
         self._init_bus_load = self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].values
         self._init_bus_gen = self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].values
         self._init_bus_lor = self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].values
@@ -493,8 +493,6 @@ class PowsyblBackend(Backend):
         self.dim_topo = np.sum(self.sub_info)
         self._compute_pos_big_topo()
 
-
-
         self.line_status[:] = self._get_line_status()
         self._topo_vect = self._get_topo_vect()
         self.tol = 1e-5  # this is NOT the pandapower tolerance !!!! this is used to check if a storage unit
@@ -610,8 +608,6 @@ class PowsyblBackend(Backend):
                 print("Type de changement: ", self._type_to_bus_set[type_obj])
                 self._type_to_bus_set[type_obj](new_bus, id_el_backend, id_topo)
 
-    #TODO for all _apply_... (load,gen,lines...) change those functions to work with pypowsybl all have to be changed
-    #TODO using move_connectable, I think they should be shorter then those below
     def _apply_load_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_load[id_el_backend]]
@@ -651,7 +647,6 @@ class PowsyblBackend(Backend):
         self.change_bus_powerline_or(id_el_backend, new_bus_backend)
 
     def change_bus_powerline_or(self, id_powerline_backend, new_bus_backend):
-        #TODO handle the case when new_bus_backend >=0, there is a hack to do to change new_bus_backend to the good id
         equipment_name = self.name_line[id_powerline_backend]
         if new_bus_backend >= 0:
             print("Initial bus: ", self._grid.get_lines(all_attributes=True).loc[equipment_name]["bus_breaker_bus1_id"])
@@ -671,7 +666,6 @@ class PowsyblBackend(Backend):
         self.change_bus_powerline_ex(id_el_backend, new_bus_backend)
 
     def change_bus_powerline_ex(self, id_powerline_backend, new_bus_backend):
-        # TODO handle the case when new_bus_backend >=0, there is a hack to do to change new_bus_backend to the good id
         equipment_name = self.name_line[id_powerline_backend]
         if new_bus_backend >= 0:
             print("Initial bus: ",self._grid.get_lines(all_attributes=True).loc[equipment_name]["bus_breaker_bus2_id"])
@@ -685,8 +679,6 @@ class PowsyblBackend(Backend):
             self._grid.update_lines(id=equipment_name, connected2=False)
 
     def _apply_trafo_hv(self, new_bus, id_el_backend, id_topo):
-        print("id_topo : ", id_topo)
-        print("id_el_backend : ", id_el_backend)
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_lor[id_el_backend]]
         )
@@ -727,13 +719,11 @@ class PowsyblBackend(Backend):
             elif type == "TWO_WINDINGS_TRANSFORMER":
                 self._grid.update_2_windings_transformers(id=equipment_name, connected1=False)
             else:
-                print(type)
-                print(type=="LINE")
                 raise BackendError(f"The elements named {equipment_name} is not a transfo")
 
     def _apply_trafo_lv(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
-            new_bus, self._init_bus_lex[id_el_backend]
+            new_bus, self.map_sub[self._init_bus_lex[id_el_backend]]
         )
         self.change_bus_trafo_lv(id_el_backend, new_bus_backend)
 
