@@ -1,0 +1,259 @@
+# Copyright (c) 2023, Artelys (https://www.artelys.com/)
+# @author Rémi Tschupp <remi.tschupp@artelys.com>
+# This Source Code Form is subject to the terms of the Mozilla Public License, version 2.0.
+# If a copy of the Mozilla Public License, version 2.0 was not distributed with this file,
+# you can obtain one at http://mozilla.org/MPL/2.0/.
+# SPDX-License-Identifier: MPL-2.0
+# This file is part of Grid2Op, Grid2Op a testbed platform to model sequential decision making in power systems.
+
+import warnings
+import re
+import pypowsybl as ppow
+import pandapower as pp
+import numpy as np
+from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
+from Backend.PowsyblBackend import PowsyblBackend
+from grid2op import make, Parameters
+from grid2op.dtypes import dt_int, dt_float, dt_bool
+from grid2op.Chronics import FromNPY
+from lightsim2grid import LightSimBackend, TimeSerie, SecurityAnalysis
+from tqdm import tqdm
+import os
+from src.Backend.network import load as load_ppow_network
+
+FRAMEWORK = ppow
+
+
+try:
+    from tabulate import tabulate
+
+    TABULATE_AVAIL = True
+except ImportError:
+    print("The tabulate package is not installed. Some output might not work properly")
+    TABULATE_AVAIL = False
+
+VERBOSE = False
+MAKE_PLOT = True
+
+case_names = [
+    # "case14.json",
+    "case118.json",
+    # "case_illinois200.json",
+    # "case300.json",
+    # "case1354pegase.json",
+    # "case1888rte.json",
+    # "GBnetwork.json",  # 2224 buses
+    # "case2848rte.json",
+    # "case2869pegase.json",
+    # "case3120sp.json",
+    # "case6495rte.json",
+    # "case6515rte.json",
+    # "case9241pegase.json"
+]
+
+
+def make_grid2op_env(Backend, load_p, load_q, gen_p):
+    param = Parameters.Parameters()
+    param.init_from_dict({"NO_OVERFLOW_DISCONNECTION": True})
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+        env = make("blank",
+                    param=param, test=True,
+                    backend=Backend(),
+                    chronics_class=FromNPY,
+                    data_feeding_kwargs={"load_p": load_p,
+                                         "load_q": load_q,
+                                         "prod_p": gen_p
+                                         },
+                    grid_path=case_name,
+                    _add_to_name=f"{case_name}",
+                    )
+    return env
+
+
+def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
+    # scale loads
+
+    # use some French time series data for loads
+    # see https://github.com/BDonnot/data_generation for where to find this file
+    coeffs = {"sources": {
+        "country": "France",
+        "year": "2012",
+        "web": "http://clients.rte-france.com/lang/fr/visiteurs/vie/vie_stats_conso_inst.jsp"
+    },
+        "month": {
+            "jan": 1.21,
+            "feb": 1.40,
+            "mar": 1.05,
+            "apr": 1.01,
+            "may": 0.86,
+            "jun": 0.84,
+            "jul": 0.84,
+            "aug": 0.79,
+            "sep": 0.85,
+            "oct": 0.94,
+            "nov": 1.01,
+            "dec": 1.20
+        },
+        "day": {
+            "mon": 1.01,
+            "tue": 1.05,
+            "wed": 1.05,
+            "thu": 1.05,
+            "fri": 1.03,
+            "sat": 0.93,
+            "sun": 0.88
+        },
+        "hour": {
+            "00:00": 1.00,
+            "01:00": 0.93,
+            "02:00": 0.91,
+            "03:00": 0.86,
+            "04:00": 0.84,
+            "05:00": 0.85,
+            "06:00": 0.90,
+            "07:00": 0.97,
+            "08:00": 1.03,
+            "09:00": 1.06,
+            "10:00": 1.08,
+            "11:00": 1.09,
+            "12:00": 1.09,
+            "13:00": 1.09,
+            "14:00": 1.06,
+            "15:00": 1.03,
+            "16:00": 1.00,
+            "17:00": 1.00,
+            "18:00": 1.04,
+            "19:00": 1.09,
+            "20:00": 1.05,
+            "21:00": 1.01,
+            "22:00": 0.99,
+            "23:00": 1.03
+        }
+    }
+    vals = list(coeffs["hour"].values())
+    x_final = np.arange(12 * len(vals))
+
+    # interpolate them at 5 minutes resolution (instead of 1h)
+    vals.append(vals[0])
+    vals = np.array(vals) * coeffs["month"]["oct"] * coeffs["day"]["mon"]
+    x_interp = 12 * np.arange(len(vals))
+    print("np.arange(len(vals): ",np.arange(len(vals)))
+    print("x_interp: ",x_interp)
+    print("x_final: ",x_final)
+    coeffs = interp1d(x=x_interp, y=vals, kind="cubic")
+    all_vals = coeffs(x_final)
+
+    # compute the "smooth" loads matrix
+    load_p_smooth = all_vals.reshape(-1, 1) * load_p_init.reshape(1, -1)
+    load_q_smooth = all_vals.reshape(-1, 1) * load_q_init.reshape(1, -1)
+
+    # add a bit of noise to it to get the "final" loads matrix
+    load_p = load_p_smooth * np.random.lognormal(mean=0., sigma=0.003, size=load_p_smooth.shape)
+    load_q = load_q_smooth * np.random.lognormal(mean=0., sigma=0.003, size=load_q_smooth.shape)
+
+    # scale generators accordingly
+    gen_p = load_p.sum(axis=1).reshape(-1, 1) / load_p_init.sum() * gen_p_init.reshape(1, -1)
+    if sgen_p_init == None :
+        return load_p, load_q, gen_p
+    else :
+        sgen_p = load_p.sum(axis=1).reshape(-1, 1) / load_p_init.sum() * sgen_p_init.reshape(1, -1)
+        return load_p, load_q, gen_p, sgen_p
+
+#
+# def save_loads_gens():
+
+
+def get_env_name_displayed(env_name):
+    res = re.sub("^l2rpn_", "", env_name)
+    res = re.sub("_small$", "", res)
+    res = re.sub("_large$", "", res)
+    res = re.sub("\\.json$", "", res)
+    return res
+
+
+
+if __name__ == "__main__":
+    np.random.seed(42)
+
+    case_names_displayed = [get_env_name_displayed(el) for el in case_names]
+    g2op_times = []
+    g2op_speeds = []
+    g2op_sizes = []
+    g2op_step_time = []
+
+    ts_times = []
+    ts_speeds = []
+    ts_sizes = []
+    sa_times = []
+    sa_speeds = []
+    sa_sizes = []
+
+    for case_name in tqdm(case_names):
+
+        if not os.path.exists(case_name):
+            import pandapower.networks as pn
+
+            case = getattr(pn, os.path.splitext(case_name)[0])()
+            pp.to_json(case, case_name)
+
+        # load the case file
+        if FRAMEWORK == ppow:
+            pandapow_net = pp.from_json(case_name)
+            print(len(pandapow_net.gen))
+            if not pandapow_net.res_bus.shape[
+                0]:  # if there is no info on bus initialize with flat values the matpower network
+                _ = pp.converter.to_mpc(pandapow_net, case_name.split('.')[0] + '.mat', init='flat')
+            else:
+                _ = pp.converter.to_mpc(pandapow_net, case.split('.')[0] + '.mat')
+
+            case = load_ppow_network(case_name.split('.')[0] + '.mat',
+                                           {'matpower.import.ignore-base-voltage': 'false'})
+            FRAMEWORK.loadflow.run_dc(case)  # for slack
+            # extract reference data
+            load_p_init = 1.0 * case.get_loads()["p"].values.astype(dt_float)
+            load_q_init = 1.0 * case.get_loads()["q"].values.astype(dt_float)
+            gen_p_init = 1.0 * case.get_generators()["p"].values.astype(dt_float)
+            print(case.get_generators(all_attributes=True))
+
+        elif FRAMEWORK == pp:
+            case = FRAMEWORK.from_json(case_name)
+            FRAMEWORK.runpp(case)  # for slack
+
+            # extract reference data
+            load_p_init = 1.0 * case.load["p_mw"].values
+            load_q_init = 1.0 * case.load["q_mvar"].values
+            gen_p_init = 1.0 * case.gen["p_mw"].values
+            sgen_p_init = 1.0 * case.sgen["p_mw"].values
+
+        res_time = 1.
+        res_unit = "s"
+        if len(load_p_init) <= 1000:
+            # report results in ms if there are less than 1000 loads
+            # only affects "verbose" printing
+            res_time = 1e3
+            res_unit = "ms"
+
+        # simulate the data
+        if FRAMEWORK == ppow:
+            load_p, load_q, gen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init)
+            print("load_p type: ", type(load_p))
+            print("load_p: ", load_p.shape)
+            print("load_q type: ", type(load_q))
+            print("load_q: ", load_q.shape)
+            print("gen_p type: ", type(gen_p))
+            print("gen_p: ", gen_p.shape)
+        elif FRAMEWORK == pp:
+            load_p, load_q, gen_p, sgen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init)
+            print("load_p type: ", type(load_p))
+            print("load_p: ", load_p.shape)
+            print("load_q type: ", type(load_q))
+            print("load_q: ", load_q.shape)
+            print("gen_p type: ", type(gen_p))
+            print("gen_p: ", gen_p.shape)
+            print("s_gen_p type: ", type(sgen_p))
+            print("s_gen_p: ", sgen_p)
+        #save the data
+
