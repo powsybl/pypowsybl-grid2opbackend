@@ -20,6 +20,8 @@ from grid2op.Chronics import FromNPY
 from lightsim2grid import LightSimBackend, TimeSerie, SecurityAnalysis
 from tqdm import tqdm
 import os
+import datetime
+import pandas as pd
 from src.Backend.network import load as load_ppow_network
 
 FRAMEWORK = ppow
@@ -38,11 +40,11 @@ MAKE_PLOT = True
 
 case_names = [
     # "case14.json",
-    "case118.json",
+    # "case118.json",
     # "case_illinois200.json",
     # "case300.json",
     # "case1354pegase.json",
-    # "case1888rte.json",
+    "case1888rte.json",
     # "GBnetwork.json",  # 2224 buses
     # "case2848rte.json",
     # "case2869pegase.json",
@@ -140,9 +142,7 @@ def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
     vals.append(vals[0])
     vals = np.array(vals) * coeffs["month"]["oct"] * coeffs["day"]["mon"]
     x_interp = 12 * np.arange(len(vals))
-    print("np.arange(len(vals): ",np.arange(len(vals)))
-    print("x_interp: ",x_interp)
-    print("x_final: ",x_final)
+    # start_date_time = datetime.date.fromisocalendar(coeffs.year,)
     coeffs = interp1d(x=x_interp, y=vals, kind="cubic")
     all_vals = coeffs(x_final)
 
@@ -162,8 +162,17 @@ def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
         sgen_p = load_p.sum(axis=1).reshape(-1, 1) / load_p_init.sum() * sgen_p_init.reshape(1, -1)
         return load_p, load_q, gen_p, sgen_p
 
-#
-# def save_loads_gens():
+def save_loads_gens(list_columns,list_chronics,save_names):
+
+    try :
+        if len(list_columns) != len(list_chronics):
+            raise ValueError
+        for i in range(len(list_columns)):
+            compression_opts = dict(method='bz2')
+            df = pd.DataFrame(list_chronics[i], columns=list_columns[i])
+            df.to_csv(save_names[i], sep=';', index=False, compression=compression_opts)
+    except ValueError:
+        print("List does not have the same size, which implies that there are some chronics with unnamed objects")
 
 
 def get_env_name_displayed(env_name):
@@ -216,7 +225,6 @@ if __name__ == "__main__":
             load_p_init = 1.0 * case.get_loads()["p"].values.astype(dt_float)
             load_q_init = 1.0 * case.get_loads()["q"].values.astype(dt_float)
             gen_p_init = 1.0 * case.get_generators()["p"].values.astype(dt_float)
-            print(case.get_generators(all_attributes=True))
 
         elif FRAMEWORK == pp:
             case = FRAMEWORK.from_json(case_name)
@@ -239,12 +247,10 @@ if __name__ == "__main__":
         # simulate the data
         if FRAMEWORK == ppow:
             load_p, load_q, gen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init)
-            print("load_p type: ", type(load_p))
-            print("load_p: ", load_p.shape)
-            print("load_q type: ", type(load_q))
-            print("load_q: ", load_q.shape)
-            print("gen_p type: ", type(gen_p))
-            print("gen_p: ", gen_p.shape)
+            columns_loads = case.get_loads(all_attributes=True).index.values
+            column_gens = case.get_generators(all_attributes=True).index.values
+            save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], ['load_p.csv.bz2', 'load_q.csv.bz2', 'gen_p.csv.bz2'])
+
         elif FRAMEWORK == pp:
             load_p, load_q, gen_p, sgen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init)
             print("load_p type: ", type(load_p))
