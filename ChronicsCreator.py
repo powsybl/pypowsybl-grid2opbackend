@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # This file is part of Grid2Op, Grid2Op a testbed platform to model sequential decision making in power systems.
 
+import json
 import warnings
 import re
 import pypowsybl as ppow
@@ -211,7 +212,20 @@ if __name__ == "__main__":
         # load the case file
         if FRAMEWORK == ppow:
             pandapow_net = pp.from_json(case_name)
-            print(len(pandapow_net.gen))
+            # Handling thermal limits
+            with open(r'Thermal_limits.json', 'w') as fp:
+                thermal = 1000 * np.concatenate(
+                    (
+                        pandapow_net.line["max_i_ka"].values,
+                        pandapow_net.trafo["sn_mva"].values / (np.sqrt(3) * pandapow_net.trafo["vn_hv_kv"].values)
+                    )
+                )
+                json.dump(list(thermal), fp) # Multiplying by 1000 : kA -> A
+                # fp.write(str(pandapow_net.line["max_i_ka"].values))
+                # for item in pandapow_net.line["max_i_ka"].values:
+                #     print(item)
+                #     fp.write("%s\n" % (item*1000))
+            print(pandapow_net.gen)
             if not pandapow_net.res_bus.shape[
                 0]:  # if there is no info on bus initialize with flat values the matpower network
                 _ = pp.converter.to_mpc(pandapow_net, case_name.split('.')[0] + '.mat', init='flat')
@@ -249,17 +263,10 @@ if __name__ == "__main__":
             load_p, load_q, gen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init)
             columns_loads = case.get_loads(all_attributes=True).index.values
             column_gens = case.get_generators(all_attributes=True).index.values
-            save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], ['load_p.csv.bz2', 'load_q.csv.bz2', 'gen_p.csv.bz2'])
+            save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], ['load_p.csv.bz2', 'load_q.csv.bz2', 'prod_p.csv.bz2'])
 
         elif FRAMEWORK == pp:
             load_p, load_q, gen_p, sgen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init)
-            print("load_p type: ", type(load_p))
-            print("load_p: ", load_p.shape)
-            print("load_q type: ", type(load_q))
-            print("load_q: ", load_q.shape)
-            print("gen_p type: ", type(gen_p))
-            print("gen_p: ", gen_p.shape)
-            print("s_gen_p type: ", type(sgen_p))
-            print("s_gen_p: ", sgen_p)
+
         #save the data
 
