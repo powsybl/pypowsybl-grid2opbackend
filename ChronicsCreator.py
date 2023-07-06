@@ -176,6 +176,31 @@ def save_loads_gens(list_columns,list_chronics,save_names):
         print("List does not have the same size, which implies that there are some chronics with unnamed objects")
 
 
+def prods_charac_creator(back):
+    grid = back._grid
+    columns = ['Pmax', 'Pmin', 'name', 'type', 'bus', 'max_ramp_up', 'max_ramp_down', 'min_up_time', 'min_down_time',
+             'marginal_cost', 'shut_down_cost', 'start_cost', 'x', 'y', 'V']
+    df = pd.DataFrame(columns=columns)
+    df['Pmax'] = grid.get_generators(all_attributes=True)['max_p']
+    df['Pmin'] = grid.get_generators(all_attributes=True)['min_p']
+    df['name'] = grid.get_generators(all_attributes=True).index.values
+    df['type'] = 'thermal'
+    df['bus'] = [back.map_sub[elem] for elem in grid.get_generators(all_attributes=True)['bus_breaker_bus_id'].values]
+    df['max_ramp_up'] = 10
+    df['max_ramp_down'] = 10
+    df['min_up_time'] = 4
+    df['min_down_time'] = 4
+    df['marginal_cost'] = 70
+    df['shut_down_cost'] = 1
+    df['start_cost'] = 2
+    df['V'] = grid.get_generators(all_attributes=True)['target_v']
+
+
+
+
+    df.to_csv('prods_charac.csv', sep=',', index=False)
+
+
 def get_env_name_displayed(env_name):
     res = re.sub("^l2rpn_", "", env_name)
     res = re.sub("_small$", "", res)
@@ -211,6 +236,8 @@ if __name__ == "__main__":
 
         # load the case file
         if FRAMEWORK == ppow:
+            back = PowsyblBackend()
+            back.load_grid(case_name)
             pandapow_net = pp.from_json(case_name)
             # Handling thermal limits
             with open(r'Thermal_limits.json', 'w') as fp:
@@ -225,20 +252,22 @@ if __name__ == "__main__":
                 # for item in pandapow_net.line["max_i_ka"].values:
                 #     print(item)
                 #     fp.write("%s\n" % (item*1000))
-            print(pandapow_net.gen)
-            if not pandapow_net.res_bus.shape[
-                0]:  # if there is no info on bus initialize with flat values the matpower network
-                _ = pp.converter.to_mpc(pandapow_net, case_name.split('.')[0] + '.mat', init='flat')
-            else:
-                _ = pp.converter.to_mpc(pandapow_net, case.split('.')[0] + '.mat')
 
-            case = load_ppow_network(case_name.split('.')[0] + '.mat',
-                                           {'matpower.import.ignore-base-voltage': 'false'})
-            FRAMEWORK.loadflow.run_dc(case)  # for slack
+            # if not pandapow_net.res_bus.shape[
+            #     0]:  # if there is no info on bus initialize with flat values the matpower network
+            #     _ = pp.converter.to_mpc(pandapow_net, case_name.split('.')[0] + '.mat', init='flat')
+            # else:
+            #     _ = pp.converter.to_mpc(pandapow_net, case.split('.')[0] + '.mat')
+            #
+            # case = load_ppow_network(case_name.split('.')[0] + '.mat',
+            #                                {'matpower.import.ignore-base-voltage': 'false'})
+            back.runpf(is_dc=True)
+            # FRAMEWORK.loadflow.run_dc(case)  # for slack
+            prods_charac_creator(back)
             # extract reference data
-            load_p_init = 1.0 * case.get_loads()["p"].values.astype(dt_float)
-            load_q_init = 1.0 * case.get_loads()["q"].values.astype(dt_float)
-            gen_p_init = 1.0 * case.get_generators()["p"].values.astype(dt_float)
+            load_p_init = 1.0 * back._grid.get_loads()["p"].values.astype(dt_float)
+            load_q_init = 1.0 * back._grid.get_loads()["q"].values.astype(dt_float)
+            gen_p_init = 1.0 * back._grid.get_generators()["p"].values.astype(dt_float)
 
         elif FRAMEWORK == pp:
             case = FRAMEWORK.from_json(case_name)
@@ -261,8 +290,8 @@ if __name__ == "__main__":
         # simulate the data
         if FRAMEWORK == ppow:
             load_p, load_q, gen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init)
-            columns_loads = case.get_loads(all_attributes=True).index.values
-            column_gens = case.get_generators(all_attributes=True).index.values
+            columns_loads = back._grid.get_loads(all_attributes=True).index.values
+            column_gens = back._grid.get_generators(all_attributes=True).index.values
             save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], ['load_p.csv.bz2', 'load_q.csv.bz2', 'prod_p.csv.bz2'])
 
         elif FRAMEWORK == pp:
