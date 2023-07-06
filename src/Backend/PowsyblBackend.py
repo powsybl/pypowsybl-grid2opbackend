@@ -160,6 +160,16 @@ class PowsyblBackend(Backend):
                 self._grid = load_ppow_network(full_path)
             else:
                 raise RuntimeError('This type of file is not handled try a .mat, .xiidm or .json format')
+
+
+        # """
+        # Because sometimes we got negative pmin coming from matpower translation
+        # """
+
+        ind = self._grid.get_generators(all_attributes=True).index[self._grid.get_generators(all_attributes=True)['min_p'].values < 0]
+        corresp = [0 for elem in range(len(ind))]
+        self._grid.update_generators(id=ind, min_p=corresp)
+        print(self._grid.get_generators(all_attributes=True)['min_p'].values)
         # """
         # We want here to change the network
         # """
