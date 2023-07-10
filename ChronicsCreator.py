@@ -164,8 +164,24 @@ def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
         return load_p, load_q, gen_p, sgen_p
 
 def save_loads_gens(list_columns,list_chronics,save_names):
+    """
+    Function used to save as csv files the chronics created above with the other get_loads_gens function. The different
+    lists should be ordered, so they can correspond adequately (list of loads name combined with list of chronics for load
+     combined with the corresponding name to save it)
 
-    try :
+    :param list_columns: list of names for loads and gens under the format [list_of_loads_name,list_of_loads_name,list_of_gens_name...]
+    :type list_columns: :class:`list`
+
+    :param list_chronics: list of chronics for loads and gens under the format [load_p,load_q,prod_p,...] coming from
+    get_loads_gens output
+    :type list_chronics: :class:`list`
+
+    :param save_names: list of pathnames where to save the load_p/load_q/prod_p... files
+    :type save_names: :class: `list`
+
+    :return: ``None``
+    """
+    try:
         if len(list_columns) != len(list_chronics):
             raise ValueError
         for i in range(len(list_columns)):
@@ -177,6 +193,13 @@ def save_loads_gens(list_columns,list_chronics,save_names):
 
 
 def prods_charac_creator(back):
+    """
+    Create and save the prods_charac.csv file use in chronics.
+
+    :param back: Backend created by Grid2op using pypowsybl
+    :type back: :class: PypowsyblBackend
+
+    """
     grid = back._grid
     columns = ['Pmax', 'Pmin', 'name', 'type', 'bus', 'max_ramp_up', 'max_ramp_down', 'min_up_time', 'min_down_time',
              'marginal_cost', 'shut_down_cost', 'start_cost', 'x', 'y', 'V']
@@ -194,10 +217,6 @@ def prods_charac_creator(back):
     df['shut_down_cost'] = 1
     df['start_cost'] = 2
     df['V'] = grid.get_generators(all_attributes=True)['target_v']
-
-
-
-
     df.to_csv('prods_charac.csv', sep=',', index=False)
 
 
@@ -248,21 +267,8 @@ if __name__ == "__main__":
                     )
                 )
                 json.dump(list(thermal), fp) # Multiplying by 1000 : kA -> A
-                # fp.write(str(pandapow_net.line["max_i_ka"].values))
-                # for item in pandapow_net.line["max_i_ka"].values:
-                #     print(item)
-                #     fp.write("%s\n" % (item*1000))
 
-            # if not pandapow_net.res_bus.shape[
-            #     0]:  # if there is no info on bus initialize with flat values the matpower network
-            #     _ = pp.converter.to_mpc(pandapow_net, case_name.split('.')[0] + '.mat', init='flat')
-            # else:
-            #     _ = pp.converter.to_mpc(pandapow_net, case.split('.')[0] + '.mat')
-            #
-            # case = load_ppow_network(case_name.split('.')[0] + '.mat',
-            #                                {'matpower.import.ignore-base-voltage': 'false'})
             back.runpf(is_dc=True)
-            # FRAMEWORK.loadflow.run_dc(case)  # for slack
             prods_charac_creator(back)
             # extract reference data
             load_p_init = 1.0 * back._grid.get_loads()["p"].values.astype(dt_float)
