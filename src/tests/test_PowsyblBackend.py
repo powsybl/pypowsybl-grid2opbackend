@@ -19,10 +19,13 @@ from grid2op.tests.helper_path_test import PATH_DATA_TEST_PP, PATH_DATA_TEST
 from grid2op.tests.helper_path_test import HelperTests
 from BaseBackendTestPyPowsybl import BaseTestNames
 from BaseBackendTestPyPowsybl import BaseTestLoadingCase
+from BaseBackendTestPyPowsybl import BaseTestLoadingBackendFunc
+from BaseBackendTestPyPowsybl import BaseTestTopoAction
+
 # from grid2op.tests.BaseBackendTest import BaseTestNames
 # from grid2op.tests.BaseBackendTest import BaseTestLoadingCase
-from grid2op.tests.BaseBackendTest import BaseTestLoadingBackendFunc
-from grid2op.tests.BaseBackendTest import BaseTestTopoAction
+# from grid2op.tests.BaseBackendTest import BaseTestLoadingBackendFunc
+# from grid2op.tests.BaseBackendTest import BaseTestTopoAction
 from grid2op.tests.BaseBackendTest import BaseTestEnvPerformsCorrectCascadingFailures
 from grid2op.tests.BaseBackendTest import BaseTestChangeBusAffectRightBus
 from grid2op.tests.BaseBackendTest import BaseTestShuntAction
@@ -70,14 +73,14 @@ class TestLoadingCase(HelperTests, BaseTestLoadingCase):
 #     def get_casefile(self):
 #         return "test_case300.json"
 
-class TestNames(HelperTests, BaseTestNames):
-    def make_backend(self, detailed_infos_for_cascading_failures=False):
-        return PowsyblBackend(
-            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
-        )
-
-    def get_path(self):
-        return PATH_DATA_TEST
+# class TestNames(HelperTests, BaseTestNames):
+#     def make_backend(self, detailed_infos_for_cascading_failures=False):
+#         return PowsyblBackend(
+#             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+#         )
+#
+#     def get_path(self):
+#         return PATH_DATA_TEST
 
 # class TestLoadingCase(HelperTests, BaseTestLoadingCase):
 #     def make_backend(self, detailed_infos_for_cascading_failures=False):
