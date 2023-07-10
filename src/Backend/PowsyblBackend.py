@@ -21,6 +21,9 @@ from grid2op.dtypes import dt_int, dt_float, dt_bool
 from grid2op.Backend.Backend import Backend
 from grid2op.Action import BaseAction
 from grid2op.Exceptions import *
+from grid2op.Action._BackendAction import _BackendAction
+from grid2op.Action import ActionSpace
+from grid2op.Rules import RulesChecker
 
 try:
     import numba
@@ -137,12 +140,6 @@ class PowsyblBackend(Backend):
         if not os.path.exists(full_path):
             raise RuntimeError('There is no powergrid at "{}"'.format(full_path))
 
-        """
-        TODO : check for file extension
-        Following : https://pypowsybl.readthedocs.io/en/stable/user_guide/network.html
-        pow.network.get_import_formats()
-        ['CGMES', 'MATPOWER', 'IEEE-CDF', 'PSS/E', 'UCTE', 'XIIDM', 'POWER-FACTORY']
-        """
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             if full_path.endswith('.json'):
@@ -169,7 +166,6 @@ class PowsyblBackend(Backend):
         ind = self._grid.get_generators(all_attributes=True).index[self._grid.get_generators(all_attributes=True)['min_p'].values < 0]
         corresp = [0 for elem in range(len(ind))]
         self._grid.update_generators(id=ind, min_p=corresp)
-        print(self._grid.get_generators(all_attributes=True)['min_p'].values)
         # """
         # We want here to change the network
         # """
@@ -305,7 +301,7 @@ class PowsyblBackend(Backend):
 
         pos_already_used = np.zeros(self.n_sub, dtype=dt_int)
         self._what_object_where = [[] for _ in range(self.n_sub)]
-        
+
         # Allows us to map the id of each substation in Grid2op (an integer) with the name of each corresponding
         add_map = {}
         for bus, bus_position_id in self.map_sub.items():
@@ -637,6 +633,39 @@ class PowsyblBackend(Backend):
             new_bus, self.map_sub[self._init_bus_lor[id_el_backend]]
         )
         self.change_bus_powerline_or(id_el_backend, new_bus_backend)
+
+    # TODO to help test work
+    def _disconnect_line(self, id_):
+        print(id_)
+        game_rules = RulesChecker()
+        self._topo_vect[self.line_or_pos_topo_vect[id_]] = -1
+        self._topo_vect[self.line_ex_pos_topo_vect[id_]] = -1
+        self.line_status[id_] = False
+        action_env_class = ActionSpace.init_grid(self)
+        action_env = action_env_class(
+            gridobj=self, legal_action=game_rules.legal_action
+        )
+        action = action_env({"change_line_status": id_})
+        bk_class = _BackendAction.init_grid(self)
+        bk_action = bk_class()
+        bk_action += action
+        self.apply_action(backendAction=bk_action)
+
+    def _reconnect_line(self, id_):
+        print(id_)
+        self._topo_vect[self.line_or_pos_topo_vect[id_]] = 1
+        self._topo_vect[self.line_ex_pos_topo_vect[id_]] = 1
+        self.line_status[id_] = True
+        game_rules = RulesChecker()
+        action_env_class = ActionSpace.init_grid(self)
+        action_env = action_env_class(
+            gridobj=self, legal_action=game_rules.legal_action
+        )
+        action = action_env({"change_line_status": id_})
+        bk_class = _BackendAction.init_grid(self)
+        bk_action = bk_class()
+        bk_action += action
+        self.apply_action(backendAction=bk_action)
 
     def change_bus_powerline_or(self, id_powerline_backend, new_bus_backend):
         equipment_name = self.name_line[id_powerline_backend]
