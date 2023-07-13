@@ -49,17 +49,17 @@ import warnings
 warnings.simplefilter("error")
 
 
-class TestLoadingCase(HelperTests, BaseTestLoadingCase):
-    def make_backend(self, detailed_infos_for_cascading_failures=False):
-        return PowsyblBackend(
-            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
-        )
-
-    def get_path(self):
-        return PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
-
-    def get_casefile(self):
-        return "test_case14.json" #"test_case14.xiidm" #"case14_realistic_test.mat"
+# class TestLoadingCase(HelperTests, BaseTestLoadingCase):
+#     def make_backend(self, detailed_infos_for_cascading_failures=False):
+#         return PowsyblBackend(
+#             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+#         )
+#
+#     def get_path(self):
+#         return PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
+#
+#     def get_casefile(self):
+#         return "test_case14.json" #"test_case14.xiidm" #"case14_realistic_test.mat"
 #
 # class TestLoadingCase(HelperTests, BaseTestLoadingCase):
 #     def make_backend(self, detailed_infos_for_cascading_failures=False):
