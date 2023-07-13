@@ -634,9 +634,10 @@ class PowsyblBackend(Backend):
         )
         self.change_bus_powerline_or(id_el_backend, new_bus_backend)
 
-    # TODO to help test work
     def _disconnect_line(self, id_):
-        print(id_)
+        """
+        Function only use in unittest
+        """
         game_rules = RulesChecker()
         self._topo_vect[self.line_or_pos_topo_vect[id_]] = -1
         self._topo_vect[self.line_ex_pos_topo_vect[id_]] = -1
@@ -652,7 +653,9 @@ class PowsyblBackend(Backend):
         self.apply_action(backendAction=bk_action)
 
     def _reconnect_line(self, id_):
-        print(id_)
+        """
+        Function only use in unittest
+        """
         self._topo_vect[self.line_or_pos_topo_vect[id_]] = 1
         self._topo_vect[self.line_ex_pos_topo_vect[id_]] = 1
         self.line_status[id_] = True
@@ -1055,7 +1058,6 @@ class PowsyblBackend(Backend):
         return res
 
     def shunt_info(self):
-        # TODO WIP, have to be handle after we chose wisely the bus representation
         cls = type(self)
 
         shunt_p = self._grid.get_shunt_compensators()["p"].values.astype(dt_float)
@@ -1133,6 +1135,10 @@ class PowsyblBackend(Backend):
         load_q = self._grid.get_loads()["q"].values.astype(dt_float)
         load_v = self._aux_get_voltage_info(self._grid.get_loads()['bus_id'])
         load_theta = self._aux_get_theta_info(self._grid.get_loads()['bus_id'])
+
+        print("load_p: ", load_p)
+
+
         return load_p, load_q, load_v, load_theta
 
     def lines_or_info(self):
