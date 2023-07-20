@@ -7,16 +7,14 @@
 # This file is part of Grid2Op, Grid2Op a testbed platform to model sequential decision making in power systems.
 
 import os  # load the python os default module
-import sys  # laod the python sys default module
+import sys  # load the python sys default module
 import warnings
 import numpy as np
 import pandas as pd
-BUS_EXTENSION = '_dummy'
 import pandapower as pdp
 import pypowsybl as ppow
 import scipy
 import copy
-
 from grid2op.dtypes import dt_int, dt_float, dt_bool
 from grid2op.Backend.Backend import Backend
 from grid2op.Action import BaseAction
@@ -24,6 +22,10 @@ from grid2op.Exceptions import *
 from grid2op.Action._BackendAction import _BackendAction
 from grid2op.Action import ActionSpace
 from grid2op.Rules import RulesChecker
+from .network import load as load_ppow_network
+
+BUS_EXTENSION = '_dummy'
+
 
 try:
     import numba
@@ -35,8 +37,6 @@ except (ImportError, ModuleNotFoundError):
         "Numba cannot be loaded. You will gain possibly massive speed if installing it by "
         "\n\t{} -m pip install numba\n".format(sys.executable)
     )
-
-from .network import load as load_ppow_network
 
 
 class PowsyblBackend(Backend):
@@ -127,6 +127,19 @@ class PowsyblBackend(Backend):
         )
 
     def load_grid(self, path, filename=None):
+        """
+         INTERNAL
+
+         .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
+
+         Load the _grid, and initialize all the member of the class. Note that in order to perform topological
+         modification of the substation of the underlying powergrid, some buses are added to the test case loaded. They
+         are set as "out of service" unless a topological action acts on these specific substations.
+
+         Regarding the type of entry file (.json designed for pandapower or .xidm for pypowsybl) we use different kind
+         of loading to be sure that our network is loaded properly.
+         """
+
         if path is None and filename is None:
             raise RuntimeError(
                 "You must provide at least one of path or file to load a powergrid."
@@ -282,6 +295,9 @@ class PowsyblBackend(Backend):
 
         We ensure that the buses were properly set for Grid2op to work i.e. that there is two buses in each substation.
         This is done by using the internal function :func: `PowsyblBackend._double_buses`
+
+        I also create some mapping dictionaries to be able to translate bus naming from Grid2op to pypowsybl and vice
+        versa
         :return:
         """
         self.sub_info = np.zeros(self.n_sub, dtype=dt_int)
@@ -505,6 +521,14 @@ class PowsyblBackend(Backend):
         self._init_private_attrs()
 
     def apply_action(self, backendAction=None):
+        """
+        INTERNAL
+
+        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
+
+        Specific implementation of the method to apply an action modifying a powergrid in the pypowsybl format.
+        """
+
         if backendAction is None:
             return
         cls = type(self)
@@ -597,6 +621,18 @@ class PowsyblBackend(Backend):
                 self._type_to_bus_set[type_obj](new_bus, id_el_backend, id_topo)
 
     def _apply_load_bus(self, new_bus, id_el_backend, id_topo):
+        """
+         Change load bus.
+         If :
+             - new_bus_backend<0 : this means that we want to disconnect the load from the bus
+             - new_bus_backend>=0 : the load will be connected to the correspondant bus.
+
+         Args
+         ------
+             :param new_bus: id of the given new bus in local substation way
+             :param id_el_backend: id of the specific load in the backend
+
+         """
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_load[id_el_backend]]
         )
@@ -611,6 +647,18 @@ class PowsyblBackend(Backend):
             self._grid.update_loads(id=equipment_name, connected=False)
 
     def _apply_gen_bus(self, new_bus, id_el_backend, id_topo):
+        """
+        Change gen bus.
+        If :
+            - new_bus_backend<0 : this means that we want to disconnect the gen from the bus
+            - new_bus_backend>=0 : the gen will be connected to the correspondant bus.
+
+        Args
+        ------
+            :param new_bus: id of the given new bus in local substation way
+            :param id_el_backend: id of the specific gen in the backend
+
+        """
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_gen[id_el_backend]]
         )
@@ -629,43 +677,20 @@ class PowsyblBackend(Backend):
         )
         self.change_bus_powerline_or(id_el_backend, new_bus_backend)
 
-    def _disconnect_line(self, id_):
-        """
-        Function only use in unittest
-        """
-        game_rules = RulesChecker()
-        self._topo_vect[self.line_or_pos_topo_vect[id_]] = -1
-        self._topo_vect[self.line_ex_pos_topo_vect[id_]] = -1
-        self.line_status[id_] = False
-        action_env_class = ActionSpace.init_grid(self)
-        action_env = action_env_class(
-            gridobj=self, legal_action=game_rules.legal_action
-        )
-        action = action_env({"change_line_status": id_})
-        bk_class = _BackendAction.init_grid(self)
-        bk_action = bk_class()
-        bk_action += action
-        self.apply_action(backendAction=bk_action)
-
-    def _reconnect_line(self, id_):
-        """
-        Function only use in unittest
-        """
-        self._topo_vect[self.line_or_pos_topo_vect[id_]] = 1
-        self._topo_vect[self.line_ex_pos_topo_vect[id_]] = 1
-        self.line_status[id_] = True
-        game_rules = RulesChecker()
-        action_env_class = ActionSpace.init_grid(self)
-        action_env = action_env_class(
-            gridobj=self, legal_action=game_rules.legal_action
-        )
-        action = action_env({"change_line_status": id_})
-        bk_class = _BackendAction.init_grid(self)
-        bk_action = bk_class()
-        bk_action += action
-        self.apply_action(backendAction=bk_action)
 
     def change_bus_powerline_or(self, id_powerline_backend, new_bus_backend):
+        """
+        Change line origin bus.
+        If :
+            - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
+            - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
+
+        Args
+        ------
+            :param id_powerline_backend: id of the given line in the backend
+            :param new_bus_backend: id of the new bus for the line to be connected to
+
+        """
         equipment_name = self.name_line[id_powerline_backend]
         if new_bus_backend >= 0:
             self.move_buses(equipment_name=equipment_name,
@@ -683,6 +708,19 @@ class PowsyblBackend(Backend):
         self.change_bus_powerline_ex(id_el_backend, new_bus_backend)
 
     def change_bus_powerline_ex(self, id_powerline_backend, new_bus_backend):
+        """
+        Change line extremity bus.
+        If :
+            - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
+            - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
+
+        Args
+        ------
+            :param id_powerline_backend: id of the given line in the backend
+            :param new_bus_backend: id of the new bus for the line to be connected to
+
+        """
+
         equipment_name = self.name_line[id_powerline_backend]
         if new_bus_backend >= 0:
             self.move_buses(equipment_name=equipment_name,
@@ -708,9 +746,10 @@ class PowsyblBackend(Backend):
             - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
             - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
 
-        Args:
-            id_powerline_backend: id of the given transfo in the backend
-            new_bus_backend: id of the new bus for the transfo to be connected to
+        Args
+        ------
+            :param id_powerline_backend: id of the given transfo in the backend
+            :param new_bus_backend: id of the new bus for the transfo to be connected to
 
         """
         # TODO by convention I think that hv are connected on bus_1 but need to be checked and otherwise do some improvment
@@ -753,7 +792,9 @@ class PowsyblBackend(Backend):
         If :
             - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
             - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
-        Args:
+
+        Args
+        ------
             id_powerline_backend: id of the given transfo in the backend
             new_bus_backend: id of the new bus for the transfo to be connected to
 
@@ -1021,6 +1062,10 @@ class PowsyblBackend(Backend):
 
         # For 2 windings transfo
         i = 0
+        """
+        Because there is a problem of transcription between pandapower and pypowsybl using matpower I have to give all 
+        the elements considered as transformers 
+        """
         for row in np.concatenate((self._grid.get_2_windings_transformers(all_attributes=True)[["bus_breaker_bus1_id", "bus_breaker_bus2_id"]].values, self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0][["bus_breaker_bus1_id", "bus_breaker_bus2_id"]].values), axis=0):
             j = i + nb
             if line_status[j]:
@@ -1088,16 +1133,19 @@ class PowsyblBackend(Backend):
         return res
 
     def shunt_info(self):
-        cls = type(self)
-
         shunt_p = self._grid.get_shunt_compensators()["p"].values.astype(dt_float)
         shunt_q = self._grid.get_shunt_compensators()["q"].values.astype(dt_float)
         shunt_v = self._grid.get_buses()['v_mag'][self._grid.get_shunt_compensators()['bus_id']].values.astype(dt_float)
-        shunt_bus = self.global_bus_to_local(np.array([self.map_sub[elem] for elem in self._grid.get_shunt_compensators(all_attributes=True)["bus_breaker_bus_id"].values]),
-                                 self.shunt_to_subid)
+        shunt_bus = self.global_bus_to_local(
+            np.array(
+                [self.map_sub[elem] for elem in
+                 self._grid.get_shunt_compensators(all_attributes=True)["bus_breaker_bus_id"].values]
+            ),
+            self.shunt_to_subid)
         shunt_v[~self._grid.get_shunt_compensators()["connected"].values] = -1.0
         shunt_bus[~self._grid.get_shunt_compensators()["connected"].values] = -1
         return shunt_p, shunt_q, shunt_v, shunt_bus
+
     def storages_info(self):
         return (
             copy.deepcopy(self.storage_p),
@@ -1112,11 +1160,7 @@ class PowsyblBackend(Backend):
             p_storage = self._grid.get_batteries()["p"].values.astype(dt_float)
             q_storage = self._grid.get_batteries()["q"].values.astype(dt_float)
             v_storage = self._aux_get_voltage_info(self._grid.get_batteries()['bus_id'])
-            # v_storage = self._grid.get_buses()['v_mag'][self._grid.get_batteries()['bus_id']].values.astype(dt_float)
             theta_storage = self._aux_get_theta_info(self._grid.get_batteries()['bus_id'])
-            # theta_storage = self._grid.get_buses()['v_angle'][self._grid.get_batteries()['bus_id']].values.astype(
-            #     dt_float)
-
         else:
             p_storage = np.zeros(shape=0, dtype=dt_float)
             q_storage = np.zeros(shape=0, dtype=dt_float)
@@ -1165,10 +1209,6 @@ class PowsyblBackend(Backend):
         load_q = self._grid.get_loads()["q"].values.astype(dt_float)
         load_v = self._aux_get_voltage_info(self._grid.get_loads()['bus_id'])
         load_theta = self._aux_get_theta_info(self._grid.get_loads()['bus_id'])
-
-        print("load_p: ", load_p)
-
-
         return load_p, load_q, load_v, load_theta
 
     def lines_or_info(self):
@@ -1292,6 +1332,18 @@ class PowsyblBackend(Backend):
         return grid.get_buses()['v_mag'][grid.get_generators()['bus_id']]
 
     def _pypowsbyl_bus_name_utility_fct(self, grid):
+        """
+        Function use to access all the name of the buses in bus_breaker_topology way.
+
+        Args
+        ------
+        :param grid: Pypowsybl grid
+
+        Returns
+        -------
+        res: :class:`List`
+            List of all the buses in format bus_breaker_topology
+        """
         L = []
         for elem in grid.get_voltage_levels().index:
             for bus_id in grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index:
@@ -1449,3 +1501,39 @@ class PowsyblBackend(Backend):
         self._grid = None
         del self.__pp_backend_initial_grid
         self.__pp_backend_initial_grid = None
+
+    def _disconnect_line(self, id_):
+        """
+        Function only use in unittest
+        """
+        game_rules = RulesChecker()
+        self._topo_vect[self.line_or_pos_topo_vect[id_]] = -1
+        self._topo_vect[self.line_ex_pos_topo_vect[id_]] = -1
+        self.line_status[id_] = False
+        action_env_class = ActionSpace.init_grid(self)
+        action_env = action_env_class(
+            gridobj=self, legal_action=game_rules.legal_action
+        )
+        action = action_env({"change_line_status": id_})
+        bk_class = _BackendAction.init_grid(self)
+        bk_action = bk_class()
+        bk_action += action
+        self.apply_action(backendAction=bk_action)
+
+    def _reconnect_line(self, id_):
+        """
+        Function only use in unittest
+        """
+        self._topo_vect[self.line_or_pos_topo_vect[id_]] = 1
+        self._topo_vect[self.line_ex_pos_topo_vect[id_]] = 1
+        self.line_status[id_] = True
+        game_rules = RulesChecker()
+        action_env_class = ActionSpace.init_grid(self)
+        action_env = action_env_class(
+            gridobj=self, legal_action=game_rules.legal_action
+        )
+        action = action_env({"change_line_status": id_})
+        bk_class = _BackendAction.init_grid(self)
+        bk_action = bk_class()
+        bk_action += action
+        self.apply_action(backendAction=bk_action)
