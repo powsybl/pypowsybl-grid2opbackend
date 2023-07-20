@@ -12,6 +12,12 @@ In Pypowsybl there is a real distinction between lines, 2 winding transformers a
 In Grid2op all those objects are assimilated as lines. Nevertheless, Grid2op knows which of these lines are real powerlines 
 and those that are not.
 
+#### Use of pandapower format to test pypowsybl backend
+Because of the converter chain (Pandapower format -> Matpower -> Pypowsybl inner format), issues often happen and some
+lines or transfos are considered by pypowsybl as the opposite. A way to see those changes is to analyze the lines
+that have a null resistance (they were transfos in pandapower format), but it is still a workaround and not a solution
+or complete analysis.
+
 
 ### Thermal limitation
 
