@@ -281,7 +281,7 @@ class PowsyblBackend(Backend):
         https://grid2op.readthedocs.io/en/latest/space.html#grid2op.Space.GridObjects for more detail.
 
         We ensure that the buses were properly set for Grid2op to work i.e. that there is two buses in each substation.
-        This is done by using the internal function _double_buses
+        This is done by using the internal function :func: `PowsyblBackend._double_buses`
         :return:
         """
         self.sub_info = np.zeros(self.n_sub, dtype=dt_int)
@@ -484,7 +484,6 @@ class PowsyblBackend(Backend):
         self.gen_theta = np.full(self.n_gen, fill_value=np.NaN, dtype=dt_float)
         self.storage_theta = np.full(self.n_storage, fill_value=np.NaN, dtype=dt_float)
 
-        # for i, (_, row) in enumerate(self._grid.get_loads().iterrows()):
         self.dim_topo = np.sum(self.sub_info)
         self._compute_pos_big_topo()
 
@@ -526,12 +525,10 @@ class PowsyblBackend(Backend):
         #     bus_is[i] = bus1_status  # no iloc for bus, don't ask me why please :-/
         #     bus_is[i + self.__nb_bus_before] = bus2_status
 
-        # tmp_prod_p = self._get_vector_inj["prod_p"](self._grid)
         if np.any(prod_p.changed):
             self._grid.update_generators(id=self.name_gen, target_p=prod_p.values)
 
         if np.any(prod_v.changed):
-            # TODO check if changing the target_v is the good way to do it, seems not I have to find a solution
             self._grid.update_generators(id=self.name_gen, target_v=prod_v.values)
 
         if np.any(load_p.changed):
@@ -581,7 +578,6 @@ class PowsyblBackend(Backend):
                 sh_service = shunt_bus.values[shunt_bus.changed] != -1
                 self._grid.get_shunt_compensators()["connected"].iloc[shunt_bus.changed] = sh_service
                 chg_and_in_service = sh_service & shunt_bus.changed
-                # TODO have the backend understand the change of bus on a substation WIP
 
                 for i in range(len(chg_and_in_service)):
                     equipment_name = self.name_shunt[i]
@@ -626,7 +622,6 @@ class PowsyblBackend(Backend):
             self._grid.update_generators(id=equipment_name, connected=True)
         else:
             self._grid.update_generators(id=equipment_name, connected=False)
-            # in this case the slack bus cannot be disconnected
 
     def _apply_lor_bus(self, new_bus, id_el_backend, id_topo):
         new_bus_backend = type(self).local_bus_to_global_int(
@@ -705,6 +700,19 @@ class PowsyblBackend(Backend):
         self.change_bus_trafo_hv(id_el_backend, new_bus_backend)
 
     def change_bus_trafo_hv(self, id_powerline_backend, new_bus_backend):
+        """
+        Change high voltage transfo bus. Because of the translation between grid.json (pandapower format) and matpower
+        to be used by pypowsybl some transfos are changed to lines and reciprocally, I have to check there type in the
+        backend to be sure to use the right functions.
+        If :
+            - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
+            - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
+
+        Args:
+            id_powerline_backend: id of the given transfo in the backend
+            new_bus_backend: id of the new bus for the transfo to be connected to
+
+        """
         # TODO by convention I think that hv are connected on bus_1 but need to be checked and otherwise do some improvment
         equipment_name = self.name_line[id_powerline_backend]
         type = self._grid.get_identifiables().loc[equipment_name]["type"]
@@ -738,6 +746,20 @@ class PowsyblBackend(Backend):
         self.change_bus_trafo_lv(id_el_backend, new_bus_backend)
 
     def change_bus_trafo_lv(self, id_powerline_backend, new_bus_backend):
+        """
+        Change low voltage transfo bus. Because of the translation between grid.json (pandapower format) and matpower
+        to be used by pypowsybl some transfos are changed to lines and reciprocally, I have to check there type in the
+        backend to be sure to use the right functions.
+        If :
+            - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
+            - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
+        Args:
+            id_powerline_backend: id of the given transfo in the backend
+            new_bus_backend: id of the new bus for the transfo to be connected to
+
+        """
+        # TODO by convention I think that lv are connected on bus_2 but need to be checked and otherwise do some improvment
+
         equipment_name = self.name_line[id_powerline_backend]
         type = self._grid.get_identifiables().loc[equipment_name]["type"]
         if new_bus_backend >= 0:
@@ -763,6 +785,14 @@ class PowsyblBackend(Backend):
                 raise BackendError(f"The elements named {equipment_name} is not a transfo")
 
     def runpf(self, is_dc=False):
+        """
+        INTERNAL
+
+        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
+
+        Run a power flow on the underlying _grid.
+        """
+
         nb_bus = self.get_nb_active_bus()
 
         try:
@@ -1270,7 +1300,8 @@ class PowsyblBackend(Backend):
 
     def _double_buses(self):
         """
-        Double the buses in the pypowybl backend to ensure that Grid2op framework is working as desired.
+        Double the buses in the pypowybl backend to ensure that Grid2op framework is working as desired. Modifies
+        directly the underlying grid.
         :return:
         """
         df = self._grid.get_buses()
@@ -1283,11 +1314,24 @@ class PowsyblBackend(Backend):
             self._grid.create_buses(id=L[i] + BUS_EXTENSION, voltage_level_id=L_voltage_id[i], name=df['name'][i])
 
     def move_buses(self, equipment_name, bus_or, bus_dest):
-        #TODO handle properly the switch of buses, initial information are the type of element to change, the bus_or and
-        #TODO and bus_dest in Grid2op way
+        """
+        Function use to call the move_connectable method for every kind of powsybl object. I use self.map_sub_invert to
+        get the name of the destination bus in pypowsybl norm (not Grid2op)
+
+        :param equipment_name: Name of the equipment in pypowsybl backend context
+
+        :param bus_or: The name of the origin bus in pypowsybl backend context
+
+        :param bus_dest: The name of the destination bus in Grid2op context
+
+        """
+
         real_bus_dest = self.map_sub_invert[bus_dest]
-        if real_bus_dest!=bus_or:
-            ppow.network.move_connectable(network=self._grid, equipment_id=equipment_name, bus_origin_id=bus_or, bus_destination_id=real_bus_dest)
+        if real_bus_dest != bus_or:
+            ppow.network.move_connectable(network=self._grid,
+                                          equipment_id=equipment_name,
+                                          bus_origin_id=bus_or,
+                                          bus_destination_id=real_bus_dest)
 
     def copy(self):
         """
@@ -1296,7 +1340,6 @@ class PowsyblBackend(Backend):
         .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
 
         Performs a deep copy of the power :attr:`_grid`.
-        As pandapower is pure python, the deep copy operator is perfectly suited for the task.
         """
         # res = copy.deepcopy(self)  # this was really slow...
         res = type(self)(**self._my_kwargs)
