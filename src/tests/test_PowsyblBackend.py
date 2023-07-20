@@ -49,29 +49,18 @@ import warnings
 warnings.simplefilter("error")
 
 
-# class TestLoadingCase(HelperTests, BaseTestLoadingCase):
-#     def make_backend(self, detailed_infos_for_cascading_failures=False):
-#         return PowsyblBackend(
-#             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
-#         )
-#
-#     def get_path(self):
-#         return PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
-#
-#     def get_casefile(self):
-#         return "test_case14.json" #"test_case14.xiidm" #"case14_realistic_test.mat"
-#
-# class TestLoadingCase(HelperTests, BaseTestLoadingCase):
-#     def make_backend(self, detailed_infos_for_cascading_failures=False):
-#         return PowsyblBackend(
-#             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
-#         )
-#
-#     def get_path(self):
-#         return os.path.join(PATH_DATA_TEST, 'test_PandaPower')
-#
-#     def get_casefile(self):
-#         return "test_case300.json"
+class TestLoadingCase(HelperTests, BaseTestLoadingCase):
+    def make_backend(self, detailed_infos_for_cascading_failures=False):
+        return PowsyblBackend(
+            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+        )
+
+    def get_path(self):
+        return PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
+
+    def get_casefile(self):
+        return "test_case14.json" #"test_case14.xiidm" #"case14_realistic_test.mat"
+
 
 # class TestNames(HelperTests, BaseTestNames):
 #     def make_backend(self, detailed_infos_for_cascading_failures=False):
@@ -82,17 +71,6 @@ warnings.simplefilter("error")
 #     def get_path(self):
 #         return PATH_DATA_TEST
 
-# class TestLoadingCase(HelperTests, BaseTestLoadingCase):
-#     def make_backend(self, detailed_infos_for_cascading_failures=False):
-#         return PowsyblBackend(
-#             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
-#         )
-#
-#     def get_path(self):
-#         return PATH_DATA_TEST_PP
-
-#     def get_casefile(self):
-#         return "test_case300.xiidm"
 
 
 class TestLoadingBackendFunc(HelperTests, BaseTestLoadingBackendFunc):
