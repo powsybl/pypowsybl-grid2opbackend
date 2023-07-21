@@ -11,7 +11,7 @@ readme = "README.md"
 packages = [{include = "pypowsybl_grid2opbackend"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.9"
 jupyter = "^1.0.0"
 grid2op = "^1.8.1"
 matplotlib = "^3.7.1"
