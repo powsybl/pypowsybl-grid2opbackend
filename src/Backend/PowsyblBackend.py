@@ -37,8 +37,6 @@ except (ImportError, ModuleNotFoundError):
         "Numba cannot be loaded. You will gain possibly massive speed if installing it by "
         "\n\t{} -m pip install numba\n".format(sys.executable)
     )
-
-
 class PowsyblBackend(Backend):
 
     def __init__(
