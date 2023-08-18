@@ -12,6 +12,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pandapower as pdp
+from pandapower.plotting.plotly import simple_plotly
 import pypowsybl as ppow
 import scipy
 import copy
@@ -137,7 +138,7 @@ class PowsyblBackend(Backend):
          Regarding the type of entry file (.json designed for pandapower or .xidm for pypowsybl) we use different kind
          of loading to be sure that our network is loaded properly.
          """
-
+        self.path_redisp = path 
         if path is None and filename is None:
             raise RuntimeError(
                 "You must provide at least one of path or file to load a powergrid."
@@ -154,21 +155,23 @@ class PowsyblBackend(Backend):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             if full_path.endswith('.json'):
-                pandapow_net = pdp.from_json(full_path)
-                if not pandapow_net.res_bus.shape[
-                    0]:  # if there is no info on bus initialize with flat values the matpower network
-                    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat', init='flat')
-                else:
-                    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat')
-                self._grid = load_ppow_network(full_path.split('.')[0] + '.mat',
-                                               {'matpower.import.ignore-base-voltage': 'false'})
+                pandapow_net = pdp.from_json(full_path, convert=False)
+                ##
+                simple_plotly(pandapow_net)
+                #if not pandapow_net.res_bus.shape[
+                #    0]:  # if there is no info on bus initialize with flat values the matpower network
+                #    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat', init='flat')
+                #else:
+                #    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat')
+                self._grid = load_ppow_network(full_path,#.split('.')[0] + '.mat',
+                                              {'matpower.import.ignore-base-voltage': 'false'})         
+                
             elif full_path.endswith('.mat'):
                 self._grid = load_ppow_network(full_path, {'matpower.import.ignore-base-voltage': 'false'})
             elif full_path.endswith('.xiidm'):
                 self._grid = load_ppow_network(full_path)
             else:
                 raise RuntimeError('This type of file is not handled try a .mat, .xiidm or .json format')
-
 
         # """
         # Because sometimes we got negative pmin coming from matpower translation
@@ -229,9 +232,8 @@ class PowsyblBackend(Backend):
         self.n_load = copy.deepcopy(
             self._grid.get_loads().shape[0])  # number of loads in the grid should be read from self._grid
         self.name_load = np.array(self._grid.get_loads()["name"].index.to_list())
-
-        self.n_sub = copy.deepcopy(self._grid.get_buses().shape[
-                                       0])  # we give as an input the number of buses that seems to be corresponding to substations in Grid2op
+        self.n_sub = copy.deepcopy(
+            self._grid.get_buses().shape[0])  # we give as an input the number of buses that seems to be corresponding to substations in Grid2op
         self.name_sub = np.array(["sub_{}".format(i) for i in self._pypowsbyl_bus_name_utility_fct(self._grid)])
 
         self.n_storage = copy.deepcopy(self._grid.get_batteries().shape[0])
@@ -298,6 +300,7 @@ class PowsyblBackend(Backend):
         versa
         :return:
         """
+        #self.redispatching_unit_commitment_availble = True
         self.sub_info = np.zeros(self.n_sub, dtype=dt_int)
         self.load_to_subid = np.zeros(self.n_load, dtype=dt_int)
         self.gen_to_subid = np.zeros(self.n_gen, dtype=dt_int)

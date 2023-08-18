@@ -56,7 +56,7 @@ warnings.simplefilter("error")
 #         )
 
 #     def get_path(self):
-#         return PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
+#         return PATH_DATA_TEST_PP #PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
 
 #     def get_casefile(self):
 #         return "test_case14.json" #"test_case14.xiidm" #"case14_realistic_test.mat"
