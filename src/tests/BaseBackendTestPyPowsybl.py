@@ -370,10 +370,15 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         self.skip_if_needed()
         # i have the correct voltages in powerlines if the formula to link mw, mvar, kv and amps is correct
         conv = self.backend.runpf(is_dc=False)
-        assert conv, "powerflow diverge at loading"
+        assert conv[0], "powerflow diverge at loading"
 
         p_or, q_or, v_or, a_or = self.backend.lines_or_info()
         a_th = np.sqrt(p_or ** 2 + q_or ** 2) * 1e3 / (np.sqrt(3) * v_or)
+        print("p_or="+str(p_or))
+        print("q_or="+str(q_or))
+        print("v_or="+str(v_or))
+        print("a_or="+str(a_or))
+        print("a_th="+str(a_th))
         assert self.compare_vect(a_th, a_or)
 
         p_ex, q_ex, v_ex, a_ex = self.backend.lines_ex_info()
@@ -444,7 +449,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
                 #), "problem for generator {}".format(g_id)
                 continue
             assert False, "generator {} has not been checked".format(g_id)
-        assert False
+
     def test_copy(self):
         self.skip_if_needed()
         conv = self.backend.runpf(is_dc=False)
@@ -911,15 +916,13 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         # compute a load flow an performs more tests
         conv = self.backend.runpf()
         assert (
-            conv
+            conv[0]
         ), "Powerflow does not converge if lines {} and {} are removed".format(17, 19)
 
         # performs basic check
         after_lp, *_ = self.backend.loads_info()
         after_gp, *_ = self.backend.generators_info()
         after_ls = self.backend.get_line_status()
-        print(init_lp)
-        print(after_lp)
         assert self.compare_vect(init_lp, after_lp)  # check i didn't modify the loads
         # assert self.compare_vect(init_gp, after_gp)  # check i didn't modify the generators # TODO here problem with steady state, P=C+L
         assert np.all(

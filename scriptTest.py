@@ -7,20 +7,40 @@ from grid2op.Runner import Runner
 from grid2op.Episode import EpisodeData
 from tqdm import tqdm
 
+import pandapower as pp
+import pandapower.networks as pn
+import pypowsybl as pypow
+
 from src.Backend.PowsyblBackend import PowsyblBackend
 
 
-def run_onechange(backend="powsybl", acts_dict_=None, nb_of_iterations=5, PlotHelper=PlotMatplot):
+def run_onechange(backend="pypowsybl", acts_dict_=None, nb_of_iterations=5, PlotHelper=PlotMatplot):
     p = Parameters()
     p.NO_OVERFLOW_DISCONNECTION = True
-    print(f"Backend {backend} passed to run_onechange")
+    print(f"Backend {backend} passed to run_onechange : "+str(grid2op.__file__))
     if backend == "pypowsybl":
         print(f"Backend {backend} used")
-        env = grid2op.make(
-            "src\data_test\l2rpn_case14_sandbox_Pypowsybl",
-            backend=PowsyblBackend(detailed_infos_for_cascading_failures=False),
-            # param=p
-    )
+        # env = grid2op.make(
+        #     "src\data_test\l2rpn_case14_sandbox_Pypowsybl",
+        #     backend=PowsyblBackend(detailed_infos_for_cascading_failures=False),
+        #     # param=p
+        # )
+                
+        #net = pn.case1888rte() #class 'pandapower.auxiliary.pandapowerNet
+        ##net["load"]["name"]="tst"+net["load"].index.astype(str)
+        #net["load"]["name"]=net["load"].index.astype(str)
+        #net["gen"]["name"]=net["gen"].index.astype(str)
+        #net["sgen"]["name"]=net["sgen"].index.astype(str)
+        #pp.to_json(net, filename="test_1888rte_from_pp.json", store_index_names=True)
+        
+        env = grid2op.make("src\data_test\Test_1888rte_work",
+                           #"src\data_test\Test_1888rte",
+                          backend=PowsyblBackend(detailed_infos_for_cascading_failures=False),
+                          _add_to_name ="stradded",
+                          #backend=PandaPowerBackend(),
+                          param=p
+        )
+        
     else:
         print(f"Backend {backend} used")
         env = grid2op.make(
@@ -30,7 +50,7 @@ def run_onechange(backend="powsybl", acts_dict_=None, nb_of_iterations=5, PlotHe
         )
     env.set_max_iter(nb_of_iterations)
     env.seed(42)
-    plot_helper = PlotHelper(env.observation_space)
+    #plot_helper = PlotHelper(env.observation_space)
     results = dict.fromkeys(acts_dict_.keys())
     for Agent_name, act_as_dict in acts_dict_.items():
         # generate the proper class that will perform the first action (encoded by {}) in acts_dict_
@@ -39,18 +59,18 @@ def run_onechange(backend="powsybl", acts_dict_=None, nb_of_iterations=5, PlotHe
         runner = Runner(**env.get_params_for_runner(), agentClass=agent_class)
         # run 2 episode with it
         *_, episode_data = runner.run(nb_episode=1, pbar=True, add_detailed_output=True)[0]
-        fig = plot_helper.plot_obs(
-            episode_data.observations[1],
-            line_info="p",
-            gen_info="p"
-        )
+        #fig = plot_helper.plot_obs(
+        #    episode_data.observations[1],
+        #    line_info="p",
+        #    gen_info="p"
+        #)
 
-        if isinstance(plot_helper, PlotPlotly):
-            fig.write_html(f"Backend {backend} Observation n°{1} - Agent {Agent_name}.html")
-            fig.update_layout(title=f"Backend {backend} Observation n°{1} - Agent {Agent_name}")
-        else:
-            fig.suptitle(f"Backend {backend} Observation n°{1} - Agent {Agent_name}")
-            fig.savefig(f"Grid2Op Backend {backend} Observation n°{1} - Agent {Agent_name}.svg")
+        #if isinstance(plot_helper, PlotPlotly):
+        #    fig.write_html(f"Backend {backend} Observation n°{1} - Agent {Agent_name}.html")
+        #    fig.update_layout(title=f"Backend {backend} Observation n°{1} - Agent {Agent_name}")
+        #else:
+        #    fig.suptitle(f"Backend {backend} Observation n°{1} - Agent {Agent_name}")
+        #    fig.savefig(f"Grid2Op Backend {backend} Observation n°{1} - Agent {Agent_name}.svg")
         results[Agent_name] = episode_data
 
     for elem in episode_data.observations:
@@ -61,7 +81,7 @@ def run_onechange(backend="powsybl", acts_dict_=None, nb_of_iterations=5, PlotHe
     return results
 
 
-def run_donoting(backend="powsybl", n_iter=1, PlotHelper=PlotMatplot):
+def run_donothing(backend="powsybl", n_iter=1, PlotHelper=PlotMatplot):
 
     if backend == "pypowsybl":
         env = grid2op.make("src\data_test\l2rpn_case14_sandbox_Pypowsybl",

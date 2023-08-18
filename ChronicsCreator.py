@@ -14,7 +14,8 @@ import pandapower as pp
 import numpy as np
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-from Backend.PowsyblBackend import PowsyblBackend
+from src.Backend.PowsyblBackend import PowsyblBackend
+from grid2op.Backend import PandaPowerBackend
 from grid2op import make, Parameters
 from grid2op.dtypes import dt_int, dt_float, dt_bool
 from grid2op.Chronics import FromNPY
@@ -46,6 +47,7 @@ case_names = [
     # "case300.json",
     # "case1354pegase.json",
     "case1888rte.json",
+    #"test_1888rte_from_pp.json",
     # "GBnetwork.json",  # 2224 buses
     # "case2848rte.json",
     # "case2869pegase.json",
@@ -157,7 +159,7 @@ def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
 
     # scale generators accordingly
     gen_p = load_p.sum(axis=1).reshape(-1, 1) / load_p_init.sum() * gen_p_init.reshape(1, -1)
-    if sgen_p_init == None :
+    if sgen_p_init is None or len(sgen_p_init) <= 0 or sgen_p_init.all():
         return load_p, load_q, gen_p
     else :
         sgen_p = load_p.sum(axis=1).reshape(-1, 1) / load_p_init.sum() * sgen_p_init.reshape(1, -1)
@@ -209,8 +211,8 @@ def prods_charac_creator(back):
     df['name'] = grid.get_generators(all_attributes=True).index.values
     df['type'] = 'thermal'
     df['bus'] = [back.map_sub[elem] for elem in grid.get_generators(all_attributes=True)['bus_breaker_bus_id'].values]
-    df['max_ramp_up'] = 10
-    df['max_ramp_down'] = 10
+    df['max_ramp_up'] = 0.1 #10
+    df['max_ramp_down'] = 0.1 #10
     df['min_up_time'] = 4
     df['min_down_time'] = 4
     df['marginal_cost'] = 70
@@ -267,16 +269,29 @@ if __name__ == "__main__":
                     )
                 )
                 json.dump(list(thermal), fp) # Multiplying by 1000 : kA -> A
-
+            
             back.runpf(is_dc=True)
             prods_charac_creator(back)
             # extract reference data
-            load_p_init = 1.0 * back._grid.get_loads()["p"].values.astype(dt_float)
-            load_q_init = 1.0 * back._grid.get_loads()["q"].values.astype(dt_float)
-            gen_p_init = 1.0 * back._grid.get_generators()["p"].values.astype(dt_float)
+            #load_p_init = 1.0 * back._grid.get_loads()["p"].values.astype(dt_float)
+            #load_q_init = 1.0 * back._grid.get_loads()["q"].values.astype(dt_float)
+            load_p_init = 0.01 * back._grid.get_loads()["p"].values.astype(dt_float)
+            load_q_init = 0.01 * back._grid.get_loads()["q"].values.astype(dt_float)
+            gen_p_init = 0.01 * back._grid.get_generators()["p"].values.astype(dt_float)
 
         elif FRAMEWORK == pp:
             case = FRAMEWORK.from_json(case_name)
+                        # Handling thermal limits
+            with open(r'Thermal_limits.json', 'w') as fp:
+                thermal = 1000 * np.concatenate(
+                    (
+                        case.line["max_i_ka"].values,
+                        case.trafo["sn_mva"].values / (np.sqrt(3) * case.trafo["vn_hv_kv"].values)
+                    )
+                )
+                json.dump(list(thermal), fp) # Multiplying by 1000 : kA -> A
+            back = PandaPowerBackend()
+            back.load_grid(case_name)
             FRAMEWORK.runpp(case)  # for slack
 
             # extract reference data
@@ -284,7 +299,13 @@ if __name__ == "__main__":
             load_q_init = 1.0 * case.load["q_mvar"].values
             gen_p_init = 1.0 * case.gen["p_mw"].values
             sgen_p_init = 1.0 * case.sgen["p_mw"].values
-
+            
+            prods_charac_creator(back)
+            # extract reference data
+            #load_p_init = 1.0 * back._grid.get_loads()["p"].values.astype(dt_float)
+            #load_q_init = 1.0 * back._grid.get_loads()["q"].values.astype(dt_float)
+            #gen_p_init = 1.0 * back._grid.get_generators()["p"].values.astype(dt_float)
+            
         res_time = 1.
         res_unit = "s"
         if len(load_p_init) <= 1000:
@@ -302,6 +323,8 @@ if __name__ == "__main__":
 
         elif FRAMEWORK == pp:
             load_p, load_q, gen_p, sgen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init)
-
+            columns_loads = case.load.index.values
+            column_gens = case.gen.index.values
+            save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], ['load_p.csv.bz2', 'load_q.csv.bz2', 'prod_p.csv.bz2'])
         #save the data
 
