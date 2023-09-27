@@ -155,15 +155,13 @@ class PowsyblBackend(Backend):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             if full_path.endswith('.json'):
-                pandapow_net = pdp.from_json(full_path, convert=False)
-                ##
-                simple_plotly(pandapow_net)
-                #if not pandapow_net.res_bus.shape[
-                #    0]:  # if there is no info on bus initialize with flat values the matpower network
-                #    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat', init='flat')
-                #else:
-                #    _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat')
-                self._grid = load_ppow_network(full_path,#.split('.')[0] + '.mat',
+                pandapow_net = pdp.from_json(full_path)
+                if not pandapow_net.res_bus.shape[
+                   0]:  # if there is no info on bus initialize with flat values the matpower network
+                   _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat', init='flat')
+                else:
+                   _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat')
+                self._grid = load_ppow_network(full_path.split('.')[0] + '.mat',
                                               {'matpower.import.ignore-base-voltage': 'false'})         
                 
             elif full_path.endswith('.mat'):
