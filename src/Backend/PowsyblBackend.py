@@ -4,7 +4,6 @@
 # If a copy of the Mozilla Public License, version 2.0 was not distributed with this file,
 # you can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
-# This file is part of Grid2Op, Grid2Op a testbed platform to model sequential decision making in power systems.
 
 import os  # load the python os default module
 import sys  # load the python sys default module
@@ -113,7 +112,7 @@ class PowsyblBackend(Backend):
 
     def load_grid(self, path, filename=None):
         """
-         Regarding the type of entry file (.json designed for pandapower or .xiidm for pypowsybl) we use different kind
+          Regarding the type of entry file (.json designed for pandapower or .xiidm for pypowsybl) we use different kind
          of loading to be sure that our network is loaded properly.
          """
         if path is None and filename is None:
