@@ -27,17 +27,6 @@ from .network import load as load_ppow_network
 
 BUS_EXTENSION = '_dummy'
 
-
-try:
-    import numba
-
-    numba_ = True
-except (ImportError, ModuleNotFoundError):
-    numba_ = False
-    warnings.warn(
-        "Numba cannot be loaded. You will gain possibly massive speed if installing it by "
-        "\n\t{} -m pip install numba\n".format(sys.executable)
-    )
 class PowsyblBackend(Backend):
 
     def __init__(
@@ -92,8 +81,6 @@ class PowsyblBackend(Backend):
         self.gen_theta = None
         self.storage_theta = None
 
-        # self._iref_slack = None
-
         self._topo_vect = None
         self._init_bus_load = None
         self._init_bus_gen = None
@@ -116,7 +103,6 @@ class PowsyblBackend(Backend):
 
         self.dim_topo = -1
         self._number_true_line = -1
-        self.cst_1 = dt_float(1.0)
 
         self.tol = None
         self.map_sub = {}
@@ -138,7 +124,6 @@ class PowsyblBackend(Backend):
          Regarding the type of entry file (.json designed for pandapower or .xidm for pypowsybl) we use different kind
          of loading to be sure that our network is loaded properly.
          """
-        self.path_redisp = path 
         if path is None and filename is None:
             raise RuntimeError(
                 "You must provide at least one of path or file to load a powergrid."
@@ -152,25 +137,31 @@ class PowsyblBackend(Backend):
         if not os.path.exists(full_path):
             raise RuntimeError('There is no powergrid at "{}"'.format(full_path))
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore")
-            if full_path.endswith('.json'):
-                pandapow_net = pdp.from_json(full_path)
-                if not pandapow_net.res_bus.shape[
-                   0]:  # if there is no info on bus initialize with flat values the matpower network
-                   _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat', init='flat')
-                else:
-                   _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat')
-                self._grid = load_ppow_network(full_path.split('.')[0] + '.mat',
-                                              {'matpower.import.ignore-base-voltage': 'false'})         
-                
-            elif full_path.endswith('.mat'):
-                self._grid = load_ppow_network(full_path, {'matpower.import.ignore-base-voltage': 'false'})
-            elif full_path.endswith('.xiidm'):
-                self._grid = load_ppow_network(full_path)
-            else:
-                raise RuntimeError('This type of file is not handled try a .mat, .xiidm or .json format')
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore")
+                if full_path.endswith('.json'):
+                    pandapow_net = pdp.from_json(full_path)
+                    if not pandapow_net.res_bus.shape[
+                       0]:  # if there is no info on bus initialize with flat values the matpower network
+                       _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat', init='flat')
+                    else:
+                       _ = pdp.converter.to_mpc(pandapow_net, full_path.split('.')[0] + '.mat')
+                    self._grid = load_ppow_network(full_path.split('.')[0] + '.mat',
+                                                  {'matpower.import.ignore-base-voltage': 'false'})
 
+                elif full_path.endswith('.mat'):
+                    self._grid = load_ppow_network(full_path, {'matpower.import.ignore-base-voltage': 'false'})
+                elif full_path.endswith('.xiidm'):
+                    self._grid = load_ppow_network(full_path)
+                else:
+                    raise RuntimeError('This type of file is not handled try a .mat, .xiidm or .json format')
+        except Exception as exc_:
+            raise BackendError(
+                f'Impossible to load the powergrid located at "{full_path}". Please '
+                f"check the file exist and that the file represent a valid pypowsybl "
+                f"grid. For your information, the error is:\n{exc_}"
+            )
         # """
         # Because sometimes we got negative pmin coming from matpower translation
         # """
@@ -195,7 +186,8 @@ class PowsyblBackend(Backend):
         #         )
 
         self.__nb_bus_before = self._grid.get_buses().shape[0]
-        self.__nb_powerline = copy.deepcopy(self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0].shape[0])
+        self.__nb_powerline = copy.deepcopy(
+            self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0].shape[0])
         self._init_bus_load = self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].values
         self._init_bus_gen = self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].values
         self._init_bus_lor = self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].values
@@ -208,19 +200,16 @@ class PowsyblBackend(Backend):
 
         # and now initialize the attributes (see list bellow)
         if self._grid.get_3_windings_transformers().shape[0] > 0:
-            raise BackendError(f"3 windings transformers are currently not supporter. "
+            raise BackendError(f"3 windings transformers are currently not supported. "
                                f"{self._grid.get_3_windings_transformers().shape[0]} found")
 
         self.n_line = copy.deepcopy(self._grid.get_lines().shape[0]) + \
                       copy.deepcopy(self._grid.get_2_windings_transformers().shape[0])
 
-
         df_lines, df_transfo = self._return_real_lines_transfo()
         self.name_line = np.array(
             df_lines["name"].index.to_list() +
             df_transfo["name"].index.to_list()
-            # self._grid.get_lines()["name"].index.to_list() +
-            # self._grid.get_2_windings_transformers()["name"].index.to_list()
         )
 
         self.n_gen = copy.deepcopy(
@@ -256,17 +245,14 @@ class PowsyblBackend(Backend):
         self._double_buses()
 
         # Contrarly to Pandapower i do not have to handle issues with slack buses if the files are xiidm and well written
+        # I run a powerflow to initialize the paramaters of the grid in the backend
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
-            res = ppow.loadflow.run_ac(self._grid,
-                                       parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
-        # if not res[0].slack_bus_id:
-        #     BackendError("The environment do not have a configured slack_bus, try to add it by hand in the initial data"
-        #                  "file")
+            ppow.loadflow.run_ac(self._grid,
+                                 parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack))
 
         # other attributes should be read from self._grid (see table below for a full list of the attributes)
         self._init_private_attrs()
-
 
     def reset(self, path=None, grid_filename=None):
         """
@@ -315,7 +301,6 @@ class PowsyblBackend(Backend):
             self.storage_to_sub_pos = np.zeros(self.n_storage, dtype=dt_int)
 
         pos_already_used = np.zeros(self.n_sub, dtype=dt_int)
-        self._what_object_where = [[] for _ in range(self.n_sub)]
 
         # Allows us to map the id of each substation in Grid2op (an integer) with the name of each corresponding
         add_map = {}
@@ -328,13 +313,9 @@ class PowsyblBackend(Backend):
         self.line_or_to_subid = np.array(
             [self.map_sub[i] for i in df_lines["bus_breaker_bus1_id"].values] +
             [self.map_sub[i] for i in df_transfo["bus_breaker_bus1_id"].values])
-            # [self.map_sub[i] for i in self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].to_list()] +
-            # [self.map_sub[i] for i in self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus1_id"].to_list()]
         self.line_ex_to_subid = np.array(
             [self.map_sub[i] for i in df_lines["bus_breaker_bus2_id"].values]+
             [self.map_sub[i] for i in df_transfo["bus_breaker_bus2_id"].values]
-            # [self.map_sub[i] for i in self._grid.get_lines(all_attributes=True)["bus_breaker_bus2_id"].to_list()] +
-            # [self.map_sub[i] for i in self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus2_id"].to_list()]
         )
 
         for i, (line_or_pos_id, line_ex_pos_id) in enumerate(zip(self.line_or_to_subid, self.line_ex_to_subid)):
@@ -344,7 +325,6 @@ class PowsyblBackend(Backend):
             self.line_ex_to_sub_pos[i] = pos_already_used[line_ex_pos_id]
             pos_already_used[line_or_pos_id] += 1
             pos_already_used[line_ex_pos_id] += 1
-
 
         self._number_true_line = copy.deepcopy(self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0].shape[0])
 
@@ -358,7 +338,6 @@ class PowsyblBackend(Backend):
             self.gen_to_sub_pos[i] = pos_already_used[gen_subid]
             pos_already_used[gen_subid] += 1
 
-
         # For loads
         self.load_to_subid = np.array(
             [self.map_sub[i] for i in self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].to_list()]
@@ -368,7 +347,6 @@ class PowsyblBackend(Backend):
             self.sub_info[load_subid] += 1
             self.load_to_sub_pos[i] = pos_already_used[load_subid]
             pos_already_used[load_subid] += 1
-
 
         # For storage
         self.storage_to_subid = np.array(
@@ -384,7 +362,7 @@ class PowsyblBackend(Backend):
         self.dim_topo = np.sum(self.sub_info)
         self._compute_pos_big_topo()
 
-        self._get_vector_inj = {}
+        self._get_vector_inj = dict()
         self._get_vector_inj[
             "load_p"
         ] = self._load_grid_load_p_mw
@@ -406,9 +384,8 @@ class PowsyblBackend(Backend):
                 lim_list = []
                 for line_side in self._grid.get_operational_limits()[
                     np.array(self._grid.get_operational_limits()["acceptable_duration"] == -1) & #If this is a permanent limitation, we are not going to take into account other type of limitation
-                    np.array(self._grid.get_operational_limits()["type"] == "CURRENT")].iterrows():#If this is a limitation on current
-
-                        lim_list.append(line_side[1]["value"])
+                        np.array(self._grid.get_operational_limits()["type"] == "CURRENT")].iterrows():#If this is a limitation on current
+                            lim_list.append(line_side[1]["value"])
                 limit = min(lim_list)
                 self.thermal_limit_a[cpt] = limit
             cpt += 1
@@ -442,11 +419,6 @@ class PowsyblBackend(Backend):
         self.name_shunt = np.array(self._grid.get_shunt_compensators()["name"].index.to_list())
         self.shunt_to_subid = np.array(
             [self.map_sub[i] for i in self._grid.get_shunt_compensators(all_attributes=True)["bus_breaker_bus_id"].to_list()])
-        # for i, (_, row) in enumerate(self._grid.get_shunt_compensators().iterrows()):
-        #     bus = int(row["bus"])
-        #     name_shunt.append("shunt_{bus}_{index_shunt}".format(**row, index_shunt=i))
-        #     self.shunt_to_subid[i] = bus
-        # self.name_shunt = np.array(name_shunt)
         self._sh_vnkv = self._grid.get_buses()['v_mag'][
             self._grid.get_shunt_compensators()['bus_id'].values].values.astype(
             dt_float
@@ -538,15 +510,6 @@ class PowsyblBackend(Backend):
             topo__,
             shunts__,
         ) = backendAction()
-
-        # TODO Normally we don't have to handle this for the backend because inactive buses will not appear in
-        # TODO get_buses() fct for pypowsybl
-
-        # handle bus status
-        # bus_is = self._grid.get_buses()
-        # for i, (bus1_status, bus2_status) in enumerate(active_bus):
-        #     bus_is[i] = bus1_status  # no iloc for bus, don't ask me why please :-/
-        #     bus_is[i + self.__nb_bus_before] = bus2_status
 
         if np.any(prod_p.changed):
             self._grid.update_generators(id=self.name_gen, target_p=prod_p.values)
@@ -1445,14 +1408,9 @@ class PowsyblBackend(Backend):
 
         # res._iref_slack = self._iref_slack
         # res._id_bus_added = self._id_bus_added
-        # res._fact_mult_gen = copy.deepcopy(self._fact_mult_gen)
-        # res._what_object_where = copy.deepcopy(self._fact_mult_gen)
         res._number_true_line = self._number_true_line
-        # res._corresp_name_fun = copy.deepcopy(self._corresp_name_fun)
         res.dim_topo = self.dim_topo
-        # res.cst_1 = self.cst_1
         res._topo_vect = copy.deepcopy(self._topo_vect)
-        # res.slack_id = self.slack_id
 
         # function to rstore some information
         res.__nb_bus_before = (
