@@ -113,15 +113,7 @@ class PowsyblBackend(Backend):
 
     def load_grid(self, path, filename=None):
         """
-         INTERNAL
-
-         .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
-
-         Load the _grid, and initialize all the member of the class. Note that in order to perform topological
-         modification of the substation of the underlying powergrid, some buses are added to the test case loaded. They
-         are set as "out of service" unless a topological action acts on these specific substations.
-
-         Regarding the type of entry file (.json designed for pandapower or .xidm for pypowsybl) we use different kind
+         Regarding the type of entry file (.json designed for pandapower or .xiidm for pypowsybl) we use different kind
          of loading to be sure that our network is loaded properly.
          """
         if path is None and filename is None:
@@ -529,7 +521,7 @@ class PowsyblBackend(Backend):
             raise BackendError("Not ready for production")
 
             if np.any(storage.changed):
-                self._grid.update_batteries(id=self.name_storage, )
+                self._grid.update_batteries(id=self.name_storage)#  target_p=storage.values) ? not sure of how to use storage.values
 
             # topology of the storage
             stor_bus = backendAction.get_storages_bus()
@@ -714,7 +706,7 @@ class PowsyblBackend(Backend):
             :param new_bus_backend: id of the new bus for the transfo to be connected to
 
         """
-        # TODO by convention I think that hv are connected on bus_1 but need to be checked and otherwise do some improvment
+        # TODO by convention I observed that hv are connected on bus_1 but need to be checked and otherwise do some improvment
         equipment_name = self.name_line[id_powerline_backend]
         type = self._grid.get_identifiables().loc[equipment_name]["type"]
         if new_bus_backend >= 0:
@@ -761,7 +753,7 @@ class PowsyblBackend(Backend):
             new_bus_backend: id of the new bus for the transfo to be connected to
 
         """
-        # TODO by convention I think that lv are connected on bus_2 but need to be checked and otherwise do some improvment
+        # TODO by convention I observed that lv are connected on bus_2 but need to be checked and otherwise do some improvment
 
         equipment_name = self.name_line[id_powerline_backend]
         type = self._grid.get_identifiables().loc[equipment_name]["type"]
@@ -809,12 +801,10 @@ class PowsyblBackend(Backend):
 
                 # TODO check the possible use of this parameter and the reason of its to be set as is
 
-                # if self._nb_bus_before is None:
-                #     self._pf_init = "dc"
-                # elif nb_bus == self._nb_bus_before:
-                #     self._pf_init = "results"
-                # else:
-                #     self._pf_init = "auto"
+                if nb_bus == self._nb_bus_before:
+                    self._pf_init = ppow._pypowsybl.VoltageInitMode.PREVIOUS_VALUES
+                else:
+                    self._pf_init = ppow._pypowsybl.VoltageInitMode.DC_VALUES
 
                 if np.any(~self._grid.get_loads()["connected"]):
                     # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
@@ -837,11 +827,12 @@ class PowsyblBackend(Backend):
                 else:
                     res = ppow.loadflow.run_ac(self._grid,
                                                parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack,
+                                                                                   voltage_init_mode=self._pf_init
                                                                                    # voltage_init_mode="PREVIOUS_VALUES",
                                                                                    ))
 
 
-                # TODO check how to handle, seems to be using the pandapower interface
+                # TODO stores computation time here the example of pandapower handling
 
                 # # stores the computation time
                 # if "_ppc" in self._grid:
@@ -963,15 +954,12 @@ class PowsyblBackend(Backend):
         connected_2_2_transfo = pd.concat([self._grid.get_2_windings_transformers()['connected2'], self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0]['connected2']])
         transfo_2_connected = connected_1_2_transfo.values & connected_2_2_transfo.values
 
-        # connected_1_3_transfo = self._grid.get_3_windings_transformers()['connected1']
-        # connected_2_3_transfo = self._grid.get_3_windings_transformers()['connected2']
-        # transfo_3_connected = connected_1_3_transfo.values & connected_2_3_transfo.values
+        # We do not take into account 3 windings transfos for the moment
 
         return np.concatenate(
             (
                 line_connected,
                 transfo_2_connected,
-                # transfo_3_connected
             )
         ).astype(dt_bool)
 
@@ -1020,8 +1008,6 @@ class PowsyblBackend(Backend):
 
         nb = self._number_true_line
 
-
-
         # For 2 windings transfo
         i = 0
         """
@@ -1044,28 +1030,7 @@ class PowsyblBackend(Backend):
                 res[self.line_ex_pos_topo_vect[j]] = -1
             i += 1
 
-        #TODO Do not handle 3 windings transfo for the moment
-        # # For 3 windings transfo
-        # i = 0
-        # for row in self._grid.get_3_windings_transformers(all_attributes=True)[["bus_breaker_bus1_id", "bus_breaker_bus2_id"]].values:
-        #
-        #     if j is not None:
-        #         k = j + i
-        #     else:
-        #         k = nb + i
-        #     if line_status[k]:
-        #         bus_or_id = self.map_sub[row[0]]
-        #         bus_ex_id = self.map_sub[row[1]]
-        #         res[self.line_or_pos_topo_vect[k]] = (
-        #             1 if bus_or_id == self.line_or_to_subid[j] else 2
-        #         )
-        #         res[self.line_ex_pos_topo_vect[k]] = (
-        #             1 if bus_ex_id == self.line_ex_to_subid[j] else 2
-        #         )
-        #     else:
-        #         res[self.line_or_pos_topo_vect[k]] = -1
-        #         res[self.line_ex_pos_topo_vect[k]] = -1
-        #     i += 1
+        # We do not handle three windings transfos
 
         i = 0
         for bus_id in self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].values:
