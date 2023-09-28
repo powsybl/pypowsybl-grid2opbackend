@@ -60,8 +60,6 @@ from grid2op.MakeEnv import make
 from grid2op.Rules import AlwaysLegal
 from grid2op.Action._BackendAction import _BackendAction
 
-import pdb
-
 
 class MakeBackend(ABC):
     @abstractmethod
@@ -120,26 +118,6 @@ class BaseTestLoadingCase(MakeBackend):
         assert backend.n_load == 11
         assert backend.n_sub == 14
 
-        #name_line = ['L1-2-1',
-        #             'L1-5-1',
-        #             'L2-3-1',
-        #             'L2-4-1',
-        #             'L2-5-1',
-        #             'L3-4-1',
-        #             'L4-5-1',
-        #             'L6-11-1',
-        #             'L6-12-1',
-        #             'L6-13-1',
-        #             'L7-8-1',
-        #             'L7-9-1',
-        #             'L9-10-1',
-        #             'L9-14-1',
-        #             'L10-11-1',
-        #             'L12-13-1',
-        #             'L13-14-1',
-        #             'T4-7-1',
-        #             'T4-9-1',
-        #             'T5-6-1']
         name_line = ['LINE-1-2', 
                      'LINE-1-9', 
                      'LINE-10-3', 
@@ -163,20 +141,6 @@ class BaseTestLoadingCase(MakeBackend):
         name_line = np.array(name_line)
         assert np.all(sorted(backend.name_line) == sorted(name_line))
 
-        #name_sub = ['sub_B1',
-        #            'sub_B2',
-        #            'sub_B3',
-        #            'sub_B4',
-        #            'sub_B7',
-        #            'sub_B9',
-        #            'sub_B5',
-        #            'sub_B6',
-        #            'sub_B8',
-        #            'sub_B10',
-        #            'sub_B11',
-        #            'sub_B12',
-        #            'sub_B13',
-        #            'sub_B14']
         name_sub = ['sub_BUS-1',
                     'sub_BUS-10',
                     'sub_BUS-11',
@@ -194,12 +158,10 @@ class BaseTestLoadingCase(MakeBackend):
         name_sub = np.array(name_sub)
         assert np.all(sorted(backend.name_sub) == sorted(name_sub))
 
-        #name_gen = ['B1-G', 'B2-G', 'B3-G', 'B6-G', 'B8-G']
         name_gen = ['GEN-1', 'GEN-2', 'GEN-7', 'GEN-10', 'GEN-12']
         name_gen = np.array(name_gen)
         assert np.all(sorted(backend.name_gen) == sorted(name_gen))
 
-        #name_load = ['B2-L', 'B3-L', 'B4-L', 'B9-L', 'B5-L', 'B6-L', 'B10-L', 'B11-L', 'B12-L', 'B13-L', 'B14-L']
         name_load = ['LOAD-'+str(x) for x in [2,3,4,5,6,7,8,9,10,13,14]]
         assert np.all(sorted(backend.name_load) == sorted(name_load))
 
@@ -316,28 +278,6 @@ class BaseTestLoadingBackendFunc(MakeBackend):
     def test_runpf(self):
         self.skip_if_needed()
         true_values_ac = np.array(
-            # [
-            #     1.56882891e02,
-            #     7.55103818e01,
-            #     5.22755247e00,
-            #     9.42638103e00,
-            #     -3.78532238e00,
-            #     1.61425777e00,
-            #     5.64385098e00,
-            #     7.32375792e01,
-            #     5.61314959e01,
-            #     4.15162150e01,
-            #     -2.32856901e01,
-            #     -6.11582304e01,
-            #     7.35327698e00,
-            #     7.78606702e00,
-            #     1.77479769e01,
-            #     2.80741759e01,
-            #     1.60797576e01,
-            #     4.40873209e01,
-            #     -1.11022302e-14,
-            #     2.80741759e01,
-            # ]
             [
                 156.69339,
                 75.549484,
@@ -377,9 +317,9 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         print("p_or="+str(p_or))
         print("q_or="+str(q_or))
         print("v_or="+str(v_or))
-        print("a_or="+str(a_or))
+        print("a_or="+str(dt_float(a_or)))
         print("a_th="+str(a_th))
-        assert self.compare_vect(a_th, a_or)
+        assert self.compare_vect(a_th, dt_float(a_or))
 
         p_ex, q_ex, v_ex, a_ex = self.backend.lines_ex_info()
         a_th = np.sqrt(p_ex ** 2 + q_ex ** 2) * 1e3 / (np.sqrt(3) * v_ex)
@@ -409,9 +349,9 @@ class BaseTestLoadingBackendFunc(MakeBackend):
                     print("self.tol_one="+str(self.tol_one))
                     print("v_or[l_id]="+str(v_or[l_id]))
                     print("load_v[c_id]="+str(load_v[c_id]))
-                #assert (
-                #        np.abs(v_or[l_id] - load_v[c_id]) <= self.tol_one
-                #), "problem for load {}".format(c_id)
+                assert (
+                       np.abs(v_or[l_id] - load_v[c_id]) <= self.tol_one
+                ), "problem for load {}".format(c_id)
                 continue
 
             l_ids = np.where(self.backend.line_ex_to_subid == sub_id)[0]
@@ -444,9 +384,9 @@ class BaseTestLoadingBackendFunc(MakeBackend):
                     print("self.tol_one="+str(self.tol_one))
                     print("v_ex[l_id]="+str(v_ex[l_id]))
                     print("gen_v[g_id]="+str(gen_v[g_id]))
-                #assert (
-                #        np.abs(v_ex[l_id] - gen_v[g_id]) <= self.tol_one
-                #), "problem for generator {}".format(g_id)
+                assert (
+                       np.abs(v_ex[l_id] - gen_v[g_id]) <= self.tol_one
+                ), "problem for generator {}".format(g_id)
                 continue
             assert False, "generator {} has not been checked".format(g_id)
 
@@ -505,28 +445,6 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         self.skip_if_needed()
         self.backend.runpf(is_dc=False)
         true_values_ac = np.array(
-            # [
-            #     -20.40429168,
-            #     3.85499114,
-            #     4.2191378,
-            #     3.61000624,
-            #     -1.61506292,
-            #     0.75395917,
-            #     1.74717378,
-            #     3.56020295,
-            #     -1.5503504,
-            #     1.17099786,
-            #     4.47311562,
-            #     15.82364194,
-            #     3.56047297,
-            #     2.50341424,
-            #     7.21657539,
-            #     -9.68106571,
-            #     -0.42761118,
-            #     12.47067981,
-            #     -17.16297051,
-            #     5.77869057,
-            # ]
             [
                 -6.7492566,
                 6.749266,
@@ -556,28 +474,6 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         self.backend._disconnect_line(3)
         a = self.backend.runpf(is_dc=False)
         true_values_ac = np.array(
-            # [
-            #     -20.40028207,
-            #     3.65600775,
-            #     3.77916284,
-            #     0.0,
-            #     -2.10761554,
-            #     1.34025308,
-            #     5.86505081,
-            #     3.58514625,
-            #     -2.28717836,
-            #     0.81979017,
-            #     3.72328838,
-            #     17.09556423,
-            #     3.9548798,
-            #     3.18389804,
-            #     11.24144925,
-            #     -11.09660174,
-            #     -1.70423701,
-            #     13.14347167,
-            #     -14.82917601,
-            #     2.276297,
-            # ]
             [
                 -6.579158,
                 6.579168,
@@ -608,28 +504,6 @@ class BaseTestLoadingBackendFunc(MakeBackend):
     def test_pf_ac_dc(self):
         self.skip_if_needed()
         true_values_ac = np.array(
-            # [
-            #     -20.40429168,
-            #     3.85499114,
-            #     4.2191378,
-            #     3.61000624,
-            #     -1.61506292,
-            #     0.75395917,
-            #     1.74717378,
-            #     3.56020295,
-            #     -1.5503504,
-            #     1.17099786,
-            #     4.47311562,
-            #     15.82364194,
-            #     3.56047297,
-            #     2.50341424,
-            #     7.21657539,
-            #     -9.68106571,
-            #     -0.42761118,
-            #     12.47067981,
-            #     -17.16297051,
-            #     5.77869057,
-            # ]
             [
                 -6.7492566,
                 6.749266,
@@ -656,8 +530,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         conv = self.backend.runpf(is_dc=True)
         assert conv
         p_or_orig, q_or_orig, *_ = self.backend.lines_or_info()
-        #assert np.all(q_or_orig == 0.0), "in dc mode all q must be zero"
-        assert np.all(np.isnan(q_or_orig)), "in dc mode all q must be zero"
+        assert np.all(np.isnan(q_or_orig)), "in dc mode all q must be nan, equivalent to zero"
         conv = self.backend.runpf(is_dc=False)
         assert conv
         p_or_orig, q_or_orig, *_ = self.backend.lines_or_info()
@@ -728,7 +601,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         after_gp, *_ = self.backend.generators_info()
         after_ls = self.backend.get_line_status()
         assert self.compare_vect(init_lp, after_lp)  # check i didn't modify the loads
-        # assert self.compare_vect(init_gp, after_gp)  # check i didn't modify the generators  # TODO here !!! problem with steady state P=C+L
+        assert self.compare_vect(init_gp, after_gp)  # check i didn't modify the generators
         assert np.all(init_ls == after_ls)  # check i didn't disconnect any powerlines
 
         conv = self.backend.runpf()
@@ -852,7 +725,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         after_gp, *_ = self.backend.generators_info()
         after_ls = self.backend.get_line_status()
         assert self.compare_vect(init_lp, after_lp)  # check i didn't modify the loads
-        # assert self.compare_vect(init_gp, after_gp)  # check i didn't modify the generators  # TODO here problem with steady state P=C+L
+        assert self.compare_vect(init_gp, after_gp)  # check i didn't modify the generators
         assert np.all(
             ~maintenance == after_ls
         )  # check i didn't disconnect any powerlines beside the correct one
@@ -886,7 +759,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         after_gp, *_ = self.backend.generators_info()
         after_ls = self.backend.get_line_status()
         assert self.compare_vect(init_lp, after_lp)  # check i didn't modify the loads
-        # assert self.compare_vect(init_gp, after_gp)  # check i didn't modify the generators  # TODO here problem with steady state P=C+L
+        assert self.compare_vect(init_gp, after_gp)  # check i didn't modify the generators
         assert np.all(
             maintenance == ~after_ls
         )  # check i didn't disconnect any powerlines beside the correct one
@@ -924,7 +797,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         after_gp, *_ = self.backend.generators_info()
         after_ls = self.backend.get_line_status()
         assert self.compare_vect(init_lp, after_lp)  # check i didn't modify the loads
-        # assert self.compare_vect(init_gp, after_gp)  # check i didn't modify the generators # TODO here problem with steady state, P=C+L
+        assert self.compare_vect(init_gp, after_gp)  # check i didn't modify the generators
         assert np.all(
             disc | maintenance == ~after_ls
         )  # check i didn't disconnect any powerlines beside the correct one
