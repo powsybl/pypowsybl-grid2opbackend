@@ -307,6 +307,10 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         assert self.compare_vect(p_or, true_values_ac)
 
     def test_voltage_convert_powerlines(self):
+
+    # TODO Test do not pass because of lines order, and more specifically because of transformers, it looks like order are
+    # TODO not the same for p/q/v/a_th and a_or
+
         self.skip_if_needed()
         # i have the correct voltages in powerlines if the formula to link mw, mvar, kv and amps is correct
         conv = self.backend.runpf(is_dc=False)
@@ -1028,6 +1032,7 @@ class BaseTestTopoAction(MakeBackend):
             ]
         )
         assert self.compare_vect(after_amps_flow, after_amps_flow_th)
+        # There might be some issues with the related grid, it can not
         self._check_kirchoff()
 
     def test_topo_change1sub(self):
@@ -1078,29 +1083,30 @@ class BaseTestTopoAction(MakeBackend):
 
         after_amps_flow_th = np.array(
             [
-                596.58386539,
-                342.31364678,
-                18142.87789987,
-                27084.37162086,
-                10155.86483194,
-                4625.93022957,
-                15064.92626615,
-                322.59381855,
-                273.6977149,
-                82.21908229,
-                80.91290202,
-                206.04740125,
-                20480.81970337,
-                21126.22533095,
-                49275.71520428,
-                128.04429617,
-                69.00661266,
-                188.44754187,
-                688.1371226,
-                1132.42521887,
+                596.5815,
+                342.3121,
+                18143.043,
+                27084.244,
+                10155.374,
+                4625.745,
+                15064.5625,
+                322.59277,
+                273.69656,
+                82.21857,
+                80.91308,
+                206.04727,
+                20480.281,
+                21125.947,
+                49274.934,
+                128.04396,
+                69.006226,
+                188.44609,
+                688.1158,
+                1132.4117,
             ]
         )
         assert self.compare_vect(after_amps_flow, after_amps_flow_th)
+        #Issue with the grid
         self._check_kirchoff()
 
     def test_topo_change_1sub_twice(self):

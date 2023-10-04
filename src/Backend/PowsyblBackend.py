@@ -6,23 +6,20 @@
 # SPDX-License-Identifier: MPL-2.0
 
 import os  # load the python os default module
-import sys  # load the python sys default module
 import warnings
 import numpy as np
 import pandas as pd
 import pandapower as pdp
-from pandapower.plotting.plotly import simple_plotly
 import pypowsybl as ppow
 import scipy
 import copy
 from grid2op.dtypes import dt_int, dt_float, dt_bool
 from grid2op.Backend.Backend import Backend
-from grid2op.Action import BaseAction
 from grid2op.Exceptions import *
 from grid2op.Action._BackendAction import _BackendAction
 from grid2op.Action import ActionSpace
 from grid2op.Rules import RulesChecker
-from .network import load as load_ppow_network
+from src.Backend.network import load as load_ppow_network
 
 BUS_EXTENSION = '_dummy'
 
@@ -571,9 +568,9 @@ class PowsyblBackend(Backend):
 
             if type_obj is not None:
                 # storage unit are handled elsewhere
-                self._type_to_bus_set[type_obj](new_bus, id_el_backend, id_topo)
+                self._type_to_bus_set[type_obj](new_bus, id_el_backend)
 
-    def _apply_load_bus(self, new_bus, id_el_backend, id_topo):
+    def _apply_load_bus(self, new_bus, id_el_backend):
         """
          Change load bus.
          If :
@@ -599,7 +596,7 @@ class PowsyblBackend(Backend):
         else:
             self._grid.update_loads(id=equipment_name, connected=False)
 
-    def _apply_gen_bus(self, new_bus, id_el_backend, id_topo):
+    def _apply_gen_bus(self, new_bus, id_el_backend):
         """
         Change gen bus.
         If :
@@ -624,12 +621,11 @@ class PowsyblBackend(Backend):
         else:
             self._grid.update_generators(id=equipment_name, connected=False)
 
-    def _apply_lor_bus(self, new_bus, id_el_backend, id_topo):
+    def _apply_lor_bus(self, new_bus, id_el_backend):
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_lor[id_el_backend]]
         )
         self.change_bus_powerline_or(id_el_backend, new_bus_backend)
-
 
     def change_bus_powerline_or(self, id_powerline_backend, new_bus_backend):
         """
@@ -654,7 +650,7 @@ class PowsyblBackend(Backend):
         else:
             self._grid.update_lines(id=equipment_name, connected1=False)
 
-    def _apply_lex_bus(self, new_bus, id_el_backend, id_topo):
+    def _apply_lex_bus(self, new_bus, id_el_backend):
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_lex[id_el_backend]]
         )
@@ -684,7 +680,7 @@ class PowsyblBackend(Backend):
         else:
             self._grid.update_lines(id=equipment_name, connected2=False)
 
-    def _apply_trafo_hv(self, new_bus, id_el_backend, id_topo):
+    def _apply_trafo_hv(self, new_bus, id_el_backend):
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_lor[id_el_backend]]
         )
@@ -731,7 +727,7 @@ class PowsyblBackend(Backend):
             else:
                 raise BackendError(f"The elements named {equipment_name} is not a transfo")
 
-    def _apply_trafo_lv(self, new_bus, id_el_backend, id_topo):
+    def _apply_trafo_lv(self, new_bus, id_el_backend):
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_lex[id_el_backend]]
         )
@@ -878,18 +874,18 @@ class PowsyblBackend(Backend):
                 #                     self.load_v[l_id] = self.prod_v[g_id]
                 #                     break
 
-                self.p_or[:] = self._aux_get_line_info("p1", "p1")
-                self.q_or[:] = self._aux_get_line_info("q1", "q1")
+                self.p_or[:] = self._aux_get_line_info("p1")
+                self.q_or[:] = self._aux_get_line_info("q1")
                 self.v_or[:] = self._aux_get_voltage_info(self._grid.get_branches()['bus1_id'])
-                self.a_or[:] = self._aux_get_line_info("i1", "i1")
+                self.a_or[:] = self._aux_get_line_info("i1")
                 self.theta_or[:] = self._aux_get_theta_info(self._grid.get_branches()['bus1_id'])
                 self.a_or[~np.isfinite(self.a_or)] = 0.0
                 self.v_or[~np.isfinite(self.v_or)] = 0.0
 
-                self.p_ex[:] = self._aux_get_line_info("p2", "p2")
-                self.q_ex[:] = self._aux_get_line_info("q2", "q2")
+                self.p_ex[:] = self._aux_get_line_info("p2")
+                self.q_ex[:] = self._aux_get_line_info("q2")
                 self.v_ex[:] = self._aux_get_voltage_info(self._grid.get_branches()['bus2_id'])
-                self.a_ex[:] = self._aux_get_line_info("i2", "i2")
+                self.a_ex[:] = self._aux_get_line_info("i2")
                 self.theta_ex[:] = self._aux_get_theta_info(self._grid.get_branches()['bus2_id'])
                 self.a_ex[~np.isfinite(self.a_ex)] = 0.0
                 self.v_ex[~np.isfinite(self.v_ex)] = 0.0
@@ -1172,12 +1168,12 @@ class PowsyblBackend(Backend):
         """
         super().assert_grid_correct()
 
-    def _aux_get_line_info(self, colname1, colname2):
+    def _aux_get_line_info(self, colname):
         res = np.concatenate(
             (
-                self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0][colname1].values,
-                self._grid.get_2_windings_transformers(all_attributes=True)[colname2].values,
-                self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0][colname1].values,
+                self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0][colname].values,
+                self._grid.get_2_windings_transformers(all_attributes=True)[colname].values,
+                self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0][colname].values,
             )
         )
         return res
@@ -1187,12 +1183,12 @@ class PowsyblBackend(Backend):
         INTERNAL
 
         Allows to retrieve the same order as in pandapower with json files, because some transformers (the one with low
-        voltage and not any tap change possible) are condidered as lines by pypowsybl
+        voltage and not any tap change possible) are considered as lines by pypowsybl
         """
         return self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0], \
             pd.concat([self._grid.get_2_windings_transformers(all_attributes=True),
                        self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0]],
-                       join = 'inner')
+                      join='inner')
 
     def sub_from_bus_id(self, bus_id):
         # TODO check that the function is doing what we want

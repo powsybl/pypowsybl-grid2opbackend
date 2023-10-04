@@ -16,8 +16,6 @@ from typing import TYPE_CHECKING as _TYPE_CHECKING
 from typing import Union as _Union
 
 import pypowsybl._pypowsybl as _pp
-from numpy.typing import ArrayLike as _ArrayLike
-from pandas import DataFrame as _DataFrame
 from pypowsybl.network import Network, _path_to_str
 from pypowsybl.report import Reporter as _Reporter
 
