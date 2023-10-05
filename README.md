@@ -1,5 +1,9 @@
 # pypowsybl-grid2opbackend integration (AIRGo project)
 
+## Simple example of use
+In the script [ScriptForSimpleUseCase.py](src/ScriptForSimpleUseCase.py) you can find an example of simple agent doing 
+one action using our backend on the ieee14 case network. Some several actions could be taken up for you to 
+comment/decomment to act as you like on the network.
 
 ## Definition and comparison of objects between Pypowsybl and Grid2op
 
