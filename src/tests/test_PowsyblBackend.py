@@ -1,10 +1,11 @@
 # Copyright (c) 2023, Artelys (https://www.artelys.com/)
-# @author Rémi Tschupp <remi.tschupp@artelys.com>
+# See Authors.txt
 # This Source Code Form is subject to the terms of the Mozilla Public License, version 2.0.
 # If a copy of the Mozilla Public License, version 2.0 was not distributed with this file,
 # you can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
-# This file is part of Grid2Op, Grid2Op a testbed platform to model sequential decision making in power systems.
+# This file is part of pypowsybl-grid2opbackend. It is mostly inspired by the development of the several backends from
+# Grid2op framework. Most parts of code have been paste/copy.
 
 import unittest
 

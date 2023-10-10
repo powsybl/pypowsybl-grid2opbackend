@@ -1,0 +1,4 @@
+ChronicsCreator authors:
+Rémi Tschupp <remi.tschupp@artelys.com>
+Yoann Janvier <yoann.janvier@artelys.com>
+Benjamin Donnot <benjamin.donnot@rte-france.com>

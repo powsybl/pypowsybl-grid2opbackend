@@ -1,0 +1,4 @@
+Authors for src code :
+Rémi Tschupp <remi.tschupp@artelys.com>
+Yoann Janvier <yoann.janvier@artelys.com>
+Vincent Renault <vincent.renault@artelys.com>

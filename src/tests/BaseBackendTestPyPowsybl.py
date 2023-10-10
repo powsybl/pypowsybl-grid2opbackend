@@ -1,14 +1,11 @@
 # Copyright (c) 2023, Artelys (https://www.artelys.com/)
-# @author Rémi Tschupp <remi.tschupp@artelys.com>
+# See Authors.txt
 # This Source Code Form is subject to the terms of the Mozilla Public License, version 2.0.
 # If a copy of the Mozilla Public License, version 2.0 was not distributed with this file,
 # you can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
-# This file is part of Grid2Op, Grid2Op a testbed platform to model sequential decision making in power systems.
-
-# do some generic tests that can be implemented directly to test if a backend implementation can work out of the box
-# with grid2op.
-# see an example of test_Pandapower for how to use this suit.
+# This file is part of pypowsybl-grid2opbackend. It is mostly inspired by the development of the several backends from
+# Grid2op framework. Most parts of code have been paste/copy.
 
 import math
 import os
@@ -317,12 +314,20 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         assert conv[0], "powerflow diverge at loading"
 
         p_or, q_or, v_or, a_or = self.backend.lines_or_info()
+
+        p_ex, q_ex, v_ex, a_ex = self.backend.lines_ex_info()
         a_th = np.sqrt(p_or ** 2 + q_or ** 2) * 1e3 / (np.sqrt(3) * v_or)
         print("p_or="+str(p_or))
         print("q_or="+str(q_or))
         print("v_or="+str(v_or))
         print("a_or="+str(dt_float(a_or)))
+
+        print("a_ex="+str(dt_float(a_ex)))
         print("a_th="+str(a_th))
+
+        print(self.backend._grid.get_lines(all_attributes=True))
+
+        print(self.backend._grid.get_2_windings_transformers(all_attributes=True))
         assert self.compare_vect(a_th, dt_float(a_or))
 
         p_ex, q_ex, v_ex, a_ex = self.backend.lines_ex_info()
@@ -343,13 +348,16 @@ class BaseTestLoadingBackendFunc(MakeBackend):
 
         for c_id, sub_id in enumerate(self.backend.load_to_subid):
             l_ids = np.where(self.backend.line_or_to_subid == sub_id)[0]
-            print("v_or="+str(v_or))
-            print("v_ex="+str(v_ex))
-            print("load_v="+str(load_v))
+            print("l_ids:"+str(l_ids))
             if len(l_ids):
                 l_id = l_ids[0]
                 if np.abs(v_or[l_id] - load_v[c_id]) > self.tol_one:
                     print("l_ids="+str(l_ids))
+                    print("c_id= "+str(c_id))
+                    print("load_to_subid: "+str(list(enumerate(self.backend.load_to_subid))))
+                    print("v_or=" + str(v_or))
+                    print("v_ex=" + str(v_ex))
+                    print("load_v=" + str(load_v))
                     print("self.tol_one="+str(self.tol_one))
                     print("v_or[l_id]="+str(v_or[l_id]))
                     print("load_v[c_id]="+str(load_v[c_id]))
@@ -385,6 +393,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
                 l_id = l_ids[0]
                 if np.abs(v_ex[l_id] - gen_v[g_id]) > self.tol_one:
                     print("l_ids="+str(l_ids))
+                    print("c_id= "+str(c_id))
                     print("self.tol_one="+str(self.tol_one))
                     print("v_ex[l_id]="+str(v_ex[l_id]))
                     print("gen_v[g_id]="+str(gen_v[g_id]))
@@ -1009,27 +1018,27 @@ class BaseTestTopoAction(MakeBackend):
 
         after_amps_flow_th = np.array(
             [
-                596.58386539,
-                342.31364678,
-                18142.87789987,
-                27084.37162086,
-                10155.86483194,
-                4625.93022957,
-                15064.92626615,
-                322.59381855,
-                273.6977149,
-                82.21908229,
-                80.91290202,
-                206.04740125,
-                20480.81970337,
-                21126.22533095,
-                49275.71520428,
-                128.04429617,
-                69.00661266,
-                188.44754187,
-                688.1371226,
-                1132.42521887,
-            ]
+                 596.5815,
+                 342.3121,
+                 18143.043,
+                 27084.244,
+                 10155.374,
+                 4625.745,
+                 15064.5625,
+                 322.59277,
+                 273.69656,
+                 82.21857,
+                 80.91308,
+                 206.04727,
+                 20480.281,
+                 21125.947,
+                 49274.934,
+                 128.04396,
+                 69.006226,
+                 188.44609,
+                 688.1158,
+                 1132.4117
+             ]
         )
         assert self.compare_vect(after_amps_flow, after_amps_flow_th)
         # There might be some issues with the related grid, it can not
@@ -1158,26 +1167,26 @@ class BaseTestTopoAction(MakeBackend):
 
         after_amps_flow_th = np.array(
             [
-                596.58386539,
-                342.31364678,
-                18142.87789987,
-                27084.37162086,
-                10155.86483194,
-                4625.93022957,
-                15064.92626615,
-                322.59381855,
-                273.6977149,
-                82.21908229,
-                80.91290202,
-                206.04740125,
-                20480.81970337,
-                21126.22533095,
-                49275.71520428,
-                128.04429617,
-                69.00661266,
-                188.44754187,
-                688.1371226,
-                1132.42521887,
+                596.5815,
+                342.3121,
+                18143.043,
+                27084.244,
+                10155.374,
+                4625.745,
+                15064.5625,
+                322.59277,
+                273.69656,
+                82.21857,
+                80.91308,
+                206.04727,
+                20480.281,
+                21125.947,
+                49274.934,
+                128.04396,
+                69.006226,
+                188.44609,
+                688.1158,
+                1132.4117,
             ]
         )
         assert self.compare_vect(after_amps_flow, after_amps_flow_th)
@@ -1453,6 +1462,7 @@ class BaseTestTopoAction(MakeBackend):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             env = make(
+                '../data_test/l2rpn_case14_sandbox_Pypowsybl',
                 test=True,
                 backend=self.make_backend(),
                 _add_to_name="test_update_from_obs",
