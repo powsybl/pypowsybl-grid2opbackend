@@ -1,5 +1,63 @@
 # pypowsybl-grid2opbackend integration (AIRGo project)
 
+## Prerequisite
+To be able to work properly with this backend integration you will have to install a specific version of pypowsybl.
+You can find it there : [specific pypowsybl branch](https://github.com/powsybl/pypowsybl/tree/move_connectable_prototype).
+
+### Installation process
+You will have to follow the requirements from the pypowsybl repo [build from sources](https://github.com/powsybl/pypowsybl#build-from-sources) 
+I copy/paste here a version of those requirements (from 10/10/2023).
+
+> ## Build from sources
+>
+>That section is intended for developers who wish to build pypowsybl from the sources in this repository.
+>
+>Requirements:
+>
+>- Maven >= 3.1
+>- Cmake >= 3.14
+>- C++11 compiler
+>- Python >= 3.7 for Linux, Windows and MacOS amd64
+>- Python >= 3.8 for MacOS arm64
+>- [Oracle GraalVM Java 17](https://www.graalvm.org/downloads/)
+>
+>To build from sources and install PyPowSyBl package:
+>
+>```bash
+>git clone --recursive https://github.com/powsybl/pypowsybl.git
+>export JAVA_HOME=<path to GraalVM>
+>pip install --upgrade setuptools pip
+>pip install -r requirements.txt
+>pip install .
+>```
+>
+>While developing, you may find it convenient to use the developer (or editable)
+>mode of installation:
+>
+>```bash
+>pip install -e .
+># or, to build the C extension with debug symbols:
+>python setup.py build --debug develop --user
+>```
+>
+>Please refer to pip and setuptools documentations for more information.
+>
+>To run unit tests:
+>
+>```bash
+>pytest tests
+>```
+>
+>To run static type checking with `mypy`:
+>```bash
+>mypy -p pypowsybl
+>```
+>
+>To run linting inspection with `pylint`:
+>```bash
+>pylint pypowsybl
+>```
+>
 ## Simple example of use
 In the script [ScriptForSimpleUseCase.py](src/ScriptForSimpleUseCase.py) you can find an example of simple agent doing 
 one action using our backend on the ieee14 case network. Some several actions could be taken up for you to 
