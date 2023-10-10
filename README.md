@@ -99,7 +99,8 @@ is available in pypowsybl I set a huge limit which is equal to no limit.
 In Pypowsybl substations should contain at least one voltage level and busbar.
 
 #### Grid2op
-In Grid2op substations must have at least 2 busbars.
+We chose to have 2 busbars at each substation to facilitate the integration of our backend with existent tests but this 
+remains a personal choice, the explanation is bellow.
 
 Because we don't want to have to make topological choices on how to deal when multiple buses are in the same substation 
 in pypowybl we decided to double the busbars in the backend and to give the information to Grid2op as described in the doc :
