@@ -161,7 +161,7 @@ def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
     # scale generators accordingly
     gen_p = load_p.sum(axis=1).reshape(-1, 1) / load_p_init.sum() * gen_p_init.reshape(1, -1)
     if sgen_p_init is None or len(sgen_p_init) <= 0 or sgen_p_init.all():
-        return load_p, load_q, gen_p
+        return load_p, load_q, -gen_p
     else :
         sgen_p = load_p.sum(axis=1).reshape(-1, 1) / load_p_init.sum() * sgen_p_init.reshape(1, -1)
         return load_p, load_q, gen_p, sgen_p
@@ -209,11 +209,13 @@ def prods_charac_creator(back):
     df = pd.DataFrame(columns=columns)
     df['Pmax'] = grid.get_generators(all_attributes=True)['max_p']
     df['Pmin'] = grid.get_generators(all_attributes=True)['min_p']
+    df[df['Pmin'] < 0] = 0
+    print(df['Pmin'])
     df['name'] = grid.get_generators(all_attributes=True).index.values
     df['type'] = 'thermal'
     df['bus'] = [back.map_sub[elem] for elem in grid.get_generators(all_attributes=True)['bus_breaker_bus_id'].values]
-    df['max_ramp_up'] = 0.1 #10
-    df['max_ramp_down'] = 0.1 #10
+    df['max_ramp_up'] = df.apply(ramp_up, axis=1)
+    df['max_ramp_down'] = df.apply(ramp_down, axis=1)
     df['min_up_time'] = 4
     df['min_down_time'] = 4
     df['marginal_cost'] = 70
@@ -222,6 +224,15 @@ def prods_charac_creator(back):
     df['V'] = grid.get_generators(all_attributes=True)['target_v']
     df.to_csv('prods_charac.csv', sep=',', index=False)
 
+def ramp_up(row):
+    if row['Pmax']<10:
+        return row['Pmax']/2
+    return 10
+
+def ramp_down(row):
+    if row['Pmin']<10:
+        return row['Pmin']/2
+    return 10
 
 def get_env_name_displayed(env_name):
     res = re.sub("^l2rpn_", "", env_name)
@@ -263,34 +274,34 @@ if __name__ == "__main__":
             pandapow_net = pp.from_json(case_name)
             # Handling thermal limits
             with open(r'Thermal_limits.json', 'w') as fp:
-                thermal = 1000 * np.concatenate(
+                thermal = 1000 * np.concatenate( # Multiplying by 1000 : kA -> A
                     (
                         pandapow_net.line["max_i_ka"].values,
                         pandapow_net.trafo["sn_mva"].values / (np.sqrt(3) * pandapow_net.trafo["vn_hv_kv"].values)
                     )
                 )
-                json.dump(list(thermal), fp) # Multiplying by 1000 : kA -> A
+                json.dump(list(thermal), fp)
             
             back.runpf(is_dc=True)
             prods_charac_creator(back)
             # extract reference data
             #load_p_init = 1.0 * back._grid.get_loads()["p"].values.astype(dt_float)
             #load_q_init = 1.0 * back._grid.get_loads()["q"].values.astype(dt_float)
-            load_p_init = 0.01 * back._grid.get_loads()["p"].values.astype(dt_float)
-            load_q_init = 0.01 * back._grid.get_loads()["q"].values.astype(dt_float)
-            gen_p_init = 0.01 * back._grid.get_generators()["p"].values.astype(dt_float)
+            load_p_init = back._grid.get_loads()["p"].values.astype(dt_float)
+            load_q_init = back._grid.get_loads()["q"].values.astype(dt_float)
+            gen_p_init = back._grid.get_generators()["p"].values.astype(dt_float)
 
         elif FRAMEWORK == pp:
             case = FRAMEWORK.from_json(case_name)
                         # Handling thermal limits
             with open(r'Thermal_limits.json', 'w') as fp:
-                thermal = 1000 * np.concatenate(
+                thermal = 1000 * np.concatenate( # Multiplying by 1000 : kA -> A
                     (
                         case.line["max_i_ka"].values,
                         case.trafo["sn_mva"].values / (np.sqrt(3) * case.trafo["vn_hv_kv"].values)
                     )
                 )
-                json.dump(list(thermal), fp) # Multiplying by 1000 : kA -> A
+                json.dump(list(thermal), fp)
             back = PandaPowerBackend()
             back.load_grid(case_name)
             FRAMEWORK.runpp(case)  # for slack
@@ -302,10 +313,6 @@ if __name__ == "__main__":
             sgen_p_init = 1.0 * case.sgen["p_mw"].values
             
             prods_charac_creator(back)
-            # extract reference data
-            #load_p_init = 1.0 * back._grid.get_loads()["p"].values.astype(dt_float)
-            #load_q_init = 1.0 * back._grid.get_loads()["q"].values.astype(dt_float)
-            #gen_p_init = 1.0 * back._grid.get_generators()["p"].values.astype(dt_float)
             
         res_time = 1.
         res_unit = "s"
