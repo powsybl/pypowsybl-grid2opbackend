@@ -42,12 +42,6 @@ class PowsyblBackend(Backend):
 
         self._dist_slack = dist_slack
 
-        self.prod_pu_to_kv = None
-        self.load_pu_to_kv = None
-        self.lines_or_pu_to_kv = None
-        self.lines_ex_pu_to_kv = None
-        self.storage_pu_to_kv = None
-
         self.p_or = None
         self.q_or = None
         self.v_or = None
@@ -159,21 +153,6 @@ class PowsyblBackend(Backend):
         # ind = self._grid.get_generators(all_attributes=True).index[self._grid.get_generators(all_attributes=True)['min_p'].values < 0]
         # corresp = [0 for elem in range(len(ind))]
         # self._grid.update_generators(id=ind, min_p=corresp)
-        # """
-        # We want here to change the network
-        # """
-        # with warnings.catch_warnings():
-        #     warnings.filterwarnings("ignore")
-        #     try:
-        #         ppow.loadflow.run_ac(
-        #             self._grid,
-        #             distributed_slack=self._dist_slack
-        #         )
-        #     except ppow.powerflow.LoadflowNotConverged:
-        #         ppow.loadflow.run_dc(
-        #             self._grid,
-        #             distributed_slack=self._dist_slack,
-        #         )
 
         self.__nb_bus_before = self._grid.get_buses().shape[0]
         self.__nb_powerline = copy.deepcopy(
@@ -251,8 +230,6 @@ class PowsyblBackend(Backend):
         .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
 
         Reload the grid.
-        For pandapower, it is a bit faster to store of a copy of itself at the end of load_grid
-        and deep_copy it to itself instead of calling load_grid again
         """
         # Assign the content of itself as saved at the end of load_grid
         with warnings.catch_warnings():
@@ -260,7 +237,6 @@ class PowsyblBackend(Backend):
             self._grid = self.__ppow_backend_initial_grid.deepcopy()
         self._reset_all_nan()
         self._topo_vect[:] = self._get_topo_vect()
-        self.comp_time = 0.0
 
     def _init_private_attrs(self):
         """
@@ -275,7 +251,6 @@ class PowsyblBackend(Backend):
         versa
         :return:
         """
-        #self.redispatching_unit_commitment_availble = True
         self.sub_info = np.zeros(self.n_sub, dtype=dt_int)
         self.load_to_subid = np.zeros(self.n_load, dtype=dt_int)
         self.gen_to_subid = np.zeros(self.n_gen, dtype=dt_int)
@@ -370,7 +345,6 @@ class PowsyblBackend(Backend):
         cpt = 0
         self.thermal_limit_a = np.full(self.n_line, fill_value=1000000, dtype=dt_float)
         for elem in self.name_line:
-
             if elem in self._grid.get_operational_limits()[np.array(self._grid.get_operational_limits()["type"] == "CURRENT")]:
                 lim_list = []
                 for line_side in self._grid.get_operational_limits()[
@@ -380,7 +354,6 @@ class PowsyblBackend(Backend):
                 limit = min(lim_list)
                 self.thermal_limit_a[cpt] = limit
             cpt += 1
-        # TODO some verification that the fct is working as desired
 
         self.p_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
         self.q_or = np.full(self.n_line, dtype=dt_float, fill_value=np.NaN)
@@ -401,8 +374,6 @@ class PowsyblBackend(Backend):
         self.storage_q = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
         self.storage_v = np.full(self.n_storage, dtype=dt_float, fill_value=np.NaN)
         self._nb_bus_before = None
-
-        # TODO, WIP for next 70 lines check the other lines of code in PandaPowerBackend
 
         # shunts data
         self.n_shunt = self._grid.get_shunt_compensators().shape[0]
@@ -467,7 +438,7 @@ class PowsyblBackend(Backend):
 
         self.line_status[:] = self._get_line_status()
         self._topo_vect = self._get_topo_vect()
-        self.tol = 1e-5  # this is NOT the pandapower tolerance !!!! this is used to check if a storage unit
+        self.tol = 1e-5  # this is NOT the pypowsybl tolerance !!!! this is used to check if a storage unit
         # produce / absorbs anything
 
         # Create a deep copy of itself in the initial state
@@ -797,8 +768,6 @@ class PowsyblBackend(Backend):
                 warnings.filterwarnings("ignore", category=RuntimeWarning)
                 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-                # TODO check the possible use of this parameter and the reason of its to be set as is
-
                 if nb_bus == self._nb_bus_before:
                     self._pf_init = ppow._pypowsybl.VoltageInitMode.PREVIOUS_VALUES
                 else:
@@ -826,16 +795,7 @@ class PowsyblBackend(Backend):
                     res = ppow.loadflow.run_ac(self._grid,
                                                parameters=ppow.loadflow.Parameters(distributed_slack=self._dist_slack,
                                                                                    voltage_init_mode=self._pf_init
-                                                                                   # voltage_init_mode="PREVIOUS_VALUES",
                                                                                    ))
-
-
-                # TODO stores computation time here the example of pandapower handling
-
-                # # stores the computation time
-                # if "_ppc" in self._grid:
-                #     if "et" in self._grid["_ppc"]:
-                #         self.comp_time += self._grid["_ppc"]["et"]
 
                 # TODO handle the cases where things are disconnected
                 (
@@ -850,32 +810,6 @@ class PowsyblBackend(Backend):
                     self.load_v[:],
                     self.load_theta[:],
                 ) = self._loads_info()
-
-                # TODO check how to handle
-
-                # if not is_dc:
-                #     if not np.all(np.isfinite(self.load_v)):
-                #         # TODO see if there is a better way here
-                #         # some loads are disconnected: it's a game over case!
-                #         raise pp.powerflow.LoadflowNotConverged("Isolated load")
-                # else:
-                #     # fix voltages magnitude that are always "nan" for dc case
-                #     # self._grid.res_bus["vm_pu"] is always nan when computed in DC
-                #     self.load_v[:] = self.load_pu_to_kv  # TODO
-                #     # need to assign the correct value when a generator is present at the same bus
-                #     # TODO optimize this ugly loop
-                #     for l_id in range(self.n_load):
-                #         if self.load_to_subid[l_id] in self.gen_to_subid:
-                #             ind_gens = np.where(
-                #                 self.gen_to_subid == self.load_to_subid[l_id]
-                #             )[0]
-                #             for g_id in ind_gens:
-                #                 if (
-                #                         self._topo_vect[self.load_pos_topo_vect[l_id]]
-                #                         == self._topo_vect[self.gen_pos_topo_vect[g_id]]
-                #                 ):
-                #                     self.load_v[l_id] = self.prod_v[g_id]
-                #                     break
 
                 self.p_or[:] = self._aux_get_line_info("p1")
                 self.q_or[:] = self._aux_get_line_info("q1")
@@ -893,10 +827,6 @@ class PowsyblBackend(Backend):
                 self.a_ex[~np.isfinite(self.a_ex)] = 0.0
                 self.v_ex[~np.isfinite(self.v_ex)] = 0.0
 
-                # TODO check the lines below to integrate them properly
-
-                # self._nb_bus_before = None
-                # self._grid._ppc["gen"][self._iref_slack, 1] = 0.0
 
                 # handle storage units
                 # note that we have to look ourselves for disconnected storage
@@ -1106,20 +1036,6 @@ class PowsyblBackend(Backend):
         prod_v = self._aux_get_voltage_info(self._grid.get_generators()['bus_id'])
         prod_theta = self._aux_get_theta_info(self._grid.get_generators()['bus_id'])
 
-        # TODO understand if the same problem occurs in powsybl
-
-        # if self._iref_slack is not None:
-        #     # slack bus and added generator are on same bus. I need to add power of slack bus to this one.
-        #
-        #     # if self._grid.gen["bus"].iloc[self._id_bus_added] == self.gen_to_subid[self._id_bus_added]:
-        #     if "gen" in self._grid._ppc["internal"]:
-        #         prod_p[self._id_bus_added] += self._grid._ppc["internal"]["gen"][
-        #             self._iref_slack, 1
-        #         ]
-        #         prod_q[self._id_bus_added] += self._grid._ppc["internal"]["gen"][
-        #             self._iref_slack, 2
-        #         ]
-
         return copy.deepcopy(prod_p), copy.deepcopy(prod_q), copy.deepcopy(prod_v), copy.deepcopy(prod_theta)
 
     def loads_info(self):
@@ -1318,27 +1234,19 @@ class PowsyblBackend(Backend):
 
         Performs a deep copy of the power :attr:`_grid`.
         """
-        # res = copy.deepcopy(self)  # this was really slow...
         res = type(self)(**self._my_kwargs)
 
         # copy from base class (backend)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
-            # warnings depending on pandas version and pp version
             res._grid = self._grid.deepcopy()
         res.thermal_limit_a = copy.deepcopy(self.thermal_limit_a)
         res._sh_vnkv = copy.deepcopy(self._sh_vnkv)
-        res.comp_time = self.comp_time
         res.can_output_theta = self.can_output_theta
         res._is_loaded = self._is_loaded
 
         # copy all attributes from myself
-        res.prod_pu_to_kv = copy.deepcopy(self.prod_pu_to_kv)
-        res.load_pu_to_kv = copy.deepcopy(self.load_pu_to_kv)
-        res.lines_or_pu_to_kv = copy.deepcopy(self.lines_or_pu_to_kv)
-        res.lines_ex_pu_to_kv = copy.deepcopy(self.lines_ex_pu_to_kv)
-        res.storage_pu_to_kv = copy.deepcopy(self.storage_pu_to_kv)
         res.map_sub = copy.deepcopy(self.map_sub)
         res.map_sub_invert = copy.deepcopy(self.map_sub_invert)
 
@@ -1364,13 +1272,11 @@ class PowsyblBackend(Backend):
         res.prod_v = copy.deepcopy(self.prod_v)
         res.line_status = copy.deepcopy(self.line_status)
 
-        # res._pf_init = self._pf_init
+        res._pf_init = self._pf_init
         res._nb_bus_before = self._nb_bus_before
 
         res.thermal_limit_a = copy.deepcopy(self.thermal_limit_a)
 
-        # res._iref_slack = self._iref_slack
-        # res._id_bus_added = self._id_bus_added
         res._number_true_line = self._number_true_line
         res.dim_topo = self.dim_topo
         res._topo_vect = copy.deepcopy(self._topo_vect)
@@ -1395,11 +1301,10 @@ class PowsyblBackend(Backend):
 
         res.tol = (
             self.tol
-        )  # this is NOT the pandapower tolerance !!!! this is used to check if a storage unit
+        )  # this is NOT the pypowsybl tolerance !!!! this is used to check if a storage unit
         # produce / absorbs anything
 
         # TODO storage doc (in grid2op rst) of the backend
-        res.can_output_theta = self.can_output_theta  # I support the voltage angle
         res.theta_or = copy.deepcopy(self.theta_or)
         res.theta_ex = copy.deepcopy(self.theta_ex)
         res.load_theta = copy.deepcopy(self.load_theta)
