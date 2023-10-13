@@ -35,14 +35,6 @@ except ImportError:
         return res
 
 
-    """
-    test to check that it's working
-    for i in range(10):
-        for j in range(10):
-            me_ = comb(i,j)
-            real_ = math.comb(i,j)
-            assert me_ == real_, "{}, {}".format(i,j)
-    """
 import warnings
 
 import grid2op
