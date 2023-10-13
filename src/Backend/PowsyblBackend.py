@@ -16,7 +16,7 @@ import pypowsybl as ppow
 import scipy
 import copy
 from grid2op.dtypes import dt_int, dt_float, dt_bool
-from grid2op.Backend.Backend import Backend
+from grid2op.Backend.backend import Backend
 from grid2op.Exceptions import *
 from grid2op.Action._BackendAction import _BackendAction
 from grid2op.Action import ActionSpace
@@ -87,7 +87,7 @@ class PowsyblBackend(Backend):
         self._get_vector_inj = None
         self._big_topo_to_obj = None
         self._big_topo_to_backend = None
-        self.__pp_backend_initial_grid = None
+        self.__ppow_backend_initial_grid = None
 
         # Mapping some fun to apply bus updates
         self._type_to_bus_set = [
@@ -156,9 +156,9 @@ class PowsyblBackend(Backend):
         # Because sometimes we got negative pmin coming from matpower translation
         # """
 
-        ind = self._grid.get_generators(all_attributes=True).index[self._grid.get_generators(all_attributes=True)['min_p'].values < 0]
-        corresp = [0 for elem in range(len(ind))]
-        self._grid.update_generators(id=ind, min_p=corresp)
+        # ind = self._grid.get_generators(all_attributes=True).index[self._grid.get_generators(all_attributes=True)['min_p'].values < 0]
+        # corresp = [0 for elem in range(len(ind))]
+        # self._grid.update_generators(id=ind, min_p=corresp)
         # """
         # We want here to change the network
         # """
@@ -257,7 +257,7 @@ class PowsyblBackend(Backend):
         # Assign the content of itself as saved at the end of load_grid
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
-            self._grid = self.__pp_backend_initial_grid.deepcopy()
+            self._grid = self.__ppow_backend_initial_grid.deepcopy()
         self._reset_all_nan()
         self._topo_vect[:] = self._get_topo_vect()
         self.comp_time = 0.0
@@ -267,7 +267,8 @@ class PowsyblBackend(Backend):
         Internal function that is used to initialize all grid2op objects from backend, see
         https://grid2op.readthedocs.io/en/latest/space.html#grid2op.Space.GridObjects for more detail.
 
-        We ensure that the buses were properly set for Grid2op to work i.e. that there is two buses in each substation.
+        We chose to have 2 busbars at each substation to facilitate the integration of our backend with existent tests
+        but this remains a personal choice.
         This is done by using the internal function :func: `PowsyblBackend._double_buses`
 
         I also create some mapping dictionaries to be able to translate bus naming from Grid2op to pypowsybl and vice
@@ -304,7 +305,7 @@ class PowsyblBackend(Backend):
             [self.map_sub[i] for i in df_lines["bus_breaker_bus1_id"].values] +
             [self.map_sub[i] for i in df_transfo["bus_breaker_bus1_id"].values])
         self.line_ex_to_subid = np.array(
-            [self.map_sub[i] for i in df_lines["bus_breaker_bus2_id"].values]+
+            [self.map_sub[i] for i in df_lines["bus_breaker_bus2_id"].values] +
             [self.map_sub[i] for i in df_transfo["bus_breaker_bus2_id"].values]
         )
 
@@ -474,7 +475,7 @@ class PowsyblBackend(Backend):
         with warnings.catch_warnings():
             # raised on some versions of pandapower / pandas
             warnings.simplefilter("ignore", FutureWarning)
-            self.__pp_backend_initial_grid = self._grid.deepcopy()  # will be initialized in the "assert_grid_correct"
+            self.__ppow_backend_initial_grid = self._grid.deepcopy()  # will be initialized in the "assert_grid_correct"
 
         self.map_sub_invert = {v: k for k, v in self.map_sub.items()}
 
@@ -1390,7 +1391,7 @@ class PowsyblBackend(Backend):
         res._big_topo_to_backend = copy.deepcopy(self._big_topo_to_backend)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
-            res.__pp_backend_initial_grid = self.__pp_backend_initial_grid.deepcopy()
+            res.__ppow_backend_initial_grid = self.__ppow_backend_initial_grid.deepcopy()
 
         res.tol = (
             self.tol
@@ -1418,8 +1419,8 @@ class PowsyblBackend(Backend):
         """
         del self._grid
         self._grid = None
-        del self.__pp_backend_initial_grid
-        self.__pp_backend_initial_grid = None
+        del self.__ppow_backend_initial_grid
+        self.__ppow_backend_initial_grid = None
 
     def _disconnect_line(self, id_):
         """
