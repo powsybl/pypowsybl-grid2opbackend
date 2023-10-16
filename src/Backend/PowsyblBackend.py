@@ -225,10 +225,6 @@ class PowsyblBackend(Backend):
 
     def reset(self, path=None, grid_filename=None):
         """
-        INTERNAL
-
-        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
-
         Reload the grid.
         """
         # Assign the content of itself as saved at the end of load_grid
@@ -455,10 +451,6 @@ class PowsyblBackend(Backend):
 
     def apply_action(self, backendAction=None):
         """
-        INTERNAL
-
-        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
-
         Specific implementation of the method to apply an action modifying a powergrid in the pypowsybl format.
         """
 
@@ -750,9 +742,6 @@ class PowsyblBackend(Backend):
 
     def runpf(self, is_dc=False):
         """
-        INTERNAL
-
-        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
 
         Run a power flow on the underlying _grid.
         """
@@ -864,9 +853,6 @@ class PowsyblBackend(Backend):
 
     def get_line_status(self):
         """
-        INTERNAL
-
-        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
 
         As all the functions related to powerline, pypowsybl split them into multiple objects to access with separated
         getters (some for transformers, some for 3 winding transformers etc.). We make sure to get them all here.
@@ -1081,10 +1067,6 @@ class PowsyblBackend(Backend):
 
     def assert_grid_correct(self):
         """
-        INTERNAL
-
-        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
-
             This is done as it should be by the Environment
         """
         super().assert_grid_correct()
@@ -1101,8 +1083,6 @@ class PowsyblBackend(Backend):
 
     def _return_real_lines_transfo(self):
         """
-        INTERNAL
-
         Allows to retrieve the same order as in pandapower with json files, because some transformers (the one with low
         voltage and not any tap change possible) are considered as lines by pypowsybl
         """
@@ -1119,10 +1099,6 @@ class PowsyblBackend(Backend):
 
     def get_nb_active_bus(self):
         """
-        INTERNAL
-
-        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
-
         Compute the amount of buses "in service" eg with at least a powerline connected to it.
 
         Returns
@@ -1230,10 +1206,6 @@ class PowsyblBackend(Backend):
 
     def copy(self):
         """
-        INTERNAL
-
-        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
-
         Performs a deep copy of the power :attr:`_grid`.
         """
         res = type(self)(**self._my_kwargs)
@@ -1317,9 +1289,6 @@ class PowsyblBackend(Backend):
 
     def close(self):
         """
-        INTERNAL
-
-        .. warning:: /!\\\\ Internal, do not use unless you know what you are doing /!\\\\
 
         Called when the :class:`grid2op;Environment` has terminated, this function only reset the grid to a state
         where it has not been loaded.
