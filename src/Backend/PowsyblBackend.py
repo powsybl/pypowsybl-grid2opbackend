@@ -474,16 +474,16 @@ class PowsyblBackend(Backend):
         ) = backendAction()
 
         if np.any(prod_p.changed):
-            self._grid.update_generators(id=self.name_gen, target_p=prod_p.values)
+            self._grid.update_generators(id=self.name_gen[prod_p.changed], target_p=prod_p.values[prod_p.changed])
 
         if np.any(prod_v.changed):
-            self._grid.update_generators(id=self.name_gen, target_v=prod_v.values)
+            self._grid.update_generators(id=self.name_gen[prod_v.changed], target_v=prod_v.values[prod_v.changed])
 
         if np.any(load_p.changed):
-            self._grid.update_loads(id=self.name_load, p0=load_p.values)
+            self._grid.update_loads(id=self.name_load[load_p.changed], p0=load_p.values[load_p.changed])
 
         if np.any(load_q.changed):
-            self._grid.update_loads(id=self.name_load, q0=load_q.values)
+            self._grid.update_loads(id=self.name_load[load_q.changed], q0=load_q.values[load_q.changed])
 
         if self.n_storage > 0:
             # active setpoint
@@ -491,7 +491,7 @@ class PowsyblBackend(Backend):
             raise BackendError("Not ready for production")
 
             if np.any(storage.changed):
-                self._grid.update_batteries(id=self.name_storage)#  target_p=storage.values) ? not sure of how to use storage.values
+                self._grid.update_batteries(id=self.name_storage[storage.changed])#  target_p=storage.values[storage.changed]) ? not sure of how to use storage.values
 
             # topology of the storage
             stor_bus = backendAction.get_storages_bus()
@@ -516,11 +516,11 @@ class PowsyblBackend(Backend):
             shunt_p, shunt_q, shunt_bus = shunts__
 
             if np.any(shunt_p.changed):
-                self._grid.update_shunt_compensators(id=self.name_shunt,
+                self._grid.update_shunt_compensators(id=self.name_shunt[shunt_p.changed],
                                                      p=shunt_p.values[shunt_p.changed])
 
             if np.any(shunt_q.changed):
-                self._grid.update_shunt_compensators(id=self.name_shunt, q=shunt_q.values[shunt_q.changed])
+                self._grid.update_shunt_compensators(id=self.name_shunt[shunt_q.changed], q=shunt_q.values[shunt_q.changed])
 
             if np.any(shunt_bus.changed):
                 sh_service = shunt_bus.values[shunt_bus.changed] != -1
@@ -892,21 +892,23 @@ class PowsyblBackend(Backend):
         ).astype(dt_bool)
 
     def _aux_get_voltage_info(self, elements):
+        buses = self._grid.get_buses()['v_mag']
         v_list = []
         for elem in elements:
             if elem == '':
                 v_list.append(0)
             else:
-                v_list.append(self._grid.get_buses()['v_mag'][elem])
+                v_list.append(buses[elem])
         return v_list
 
     def _aux_get_theta_info(self, elements):
+        buses = self._grid.get_buses()['v_angle']
         v_list = []
         for elem in elements:
             if elem == '':
                 v_list.append(0)
             else:
-                v_list.append(self._grid.get_buses()['v_angle'][elem])
+                v_list.append(buses[elem])
         return v_list
 
     def get_topo_vect(self):
