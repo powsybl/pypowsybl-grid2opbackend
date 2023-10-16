@@ -11,7 +11,7 @@ import grid2op
 from grid2op.Agent import OneChangeThenNothing
 from grid2op.PlotGrid import PlotMatplot, PlotPlotly
 from grid2op.Runner import Runner
-from src.Backend.PowsyblBackend import PowsyblBackend
+from src.Backend.powsybl_backend import PowsyblBackend
 
 def run_onechange(acts_dict_=None, nb_of_iterations=5, PlotHelper=PlotMatplot):
     print(f"Run_onechange : " + str(grid2op.__file__))

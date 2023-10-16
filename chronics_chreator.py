@@ -15,7 +15,7 @@ import pandapower as pp
 import numpy as np
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-from src.Backend.PowsyblBackend import PowsyblBackend
+from src.Backend.powsybl_backend import PowsyblBackend
 from grid2op.Backend import PandaPowerBackend
 from grid2op import make, Parameters
 from grid2op.dtypes import dt_int, dt_float, dt_bool

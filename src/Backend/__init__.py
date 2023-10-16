@@ -6,4 +6,4 @@
 # SPDX-License-Identifier: MPL-2.0
 # This file is part of pypowsybl-grid2opbackend.
 
-__all__ = ["PowsyblBackend"]
+__all__ = ["powsybl_backend"]

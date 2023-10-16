@@ -11,14 +11,14 @@ import unittest
 
 import os
 from pathlib import Path
-from src.Backend.PowsyblBackend import PowsyblBackend
+from src.Backend.powsybl_backend import PowsyblBackend
 
 from grid2op.tests.helper_path_test import PATH_DATA_TEST_PP, PATH_DATA_TEST
 from grid2op.tests.helper_path_test import HelperTests
-from src.tests.BaseBackendTestPyPowsybl import BaseTestNames
-from src.tests.BaseBackendTestPyPowsybl import BaseTestLoadingCase
-from src.tests.BaseBackendTestPyPowsybl import BaseTestLoadingBackendFunc
-from src.tests.BaseBackendTestPyPowsybl import BaseTestTopoAction
+from src.tests.base_backend_test_powsybl import BaseTestNames
+from src.tests.base_backend_test_powsybl import BaseTestLoadingCase
+from src.tests.base_backend_test_powsybl import BaseTestLoadingBackendFunc
+from src.tests.base_backend_test_powsybl import BaseTestTopoAction
 
 from grid2op.tests.BaseBackendTest import BaseTestEnvPerformsCorrectCascadingFailures
 from grid2op.tests.BaseBackendTest import BaseTestChangeBusAffectRightBus
