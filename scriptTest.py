@@ -6,7 +6,7 @@ from grid2op.PlotGrid import PlotMatplot, PlotPlotly
 from grid2op.Runner import Runner
 from tqdm import tqdm
 
-from src.Backend.PowsyblBackend import PowsyblBackend
+from src.Backend.powsybl_backend import PowsyblBackend
 
 
 def run_onechange(backend="powsybl", acts_dict_=None, nb_of_iterations=5, PlotHelper=PlotMatplot):

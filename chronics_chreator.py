@@ -212,8 +212,8 @@ def prods_charac_creator(back):
     df['name'] = grid.get_generators(all_attributes=True).index.values
     df['type'] = 'thermal'
     df['bus'] = [back.map_sub[elem] for elem in grid.get_generators(all_attributes=True)['bus_breaker_bus_id'].values]
-    df['max_ramp_up'] = 0.1 #10
-    df['max_ramp_down'] = 0.1 #10
+    df['max_ramp_up'] = 1 #10
+    df['max_ramp_down'] = 1 #10
     df['min_up_time'] = 4
     df['min_down_time'] = 4
     df['marginal_cost'] = 70
@@ -273,12 +273,11 @@ if __name__ == "__main__":
             
             back.runpf(is_dc=True)
             prods_charac_creator(back)
+            coeff_l = 1.0
             # extract reference data
-            #load_p_init = 1.0 * back._grid.get_loads()["p"].values.astype(dt_float)
-            #load_q_init = 1.0 * back._grid.get_loads()["q"].values.astype(dt_float)
-            load_p_init = 0.01 * back._grid.get_loads()["p"].values.astype(dt_float)
-            load_q_init = 0.01 * back._grid.get_loads()["q"].values.astype(dt_float)
-            gen_p_init = 0.01 * back._grid.get_generators()["p"].values.astype(dt_float)
+            load_p_init = coeff_l * back._grid.get_loads()["p"].values.astype(dt_float)
+            load_q_init = coeff_l * back._grid.get_loads()["q"].values.astype(dt_float)
+            gen_p_init = coeff_l * back._grid.get_generators()["p"].values.astype(dt_float)
 
         elif FRAMEWORK == pp:
             case = FRAMEWORK.from_json(case_name)
@@ -301,7 +300,7 @@ if __name__ == "__main__":
             gen_p_init = 1.0 * case.gen["p_mw"].values
             sgen_p_init = 1.0 * case.sgen["p_mw"].values
             
-            prods_charac_creator(back)
+            #prods_charac_creator(back)
             # extract reference data
             #load_p_init = 1.0 * back._grid.get_loads()["p"].values.astype(dt_float)
             #load_q_init = 1.0 * back._grid.get_loads()["q"].values.astype(dt_float)

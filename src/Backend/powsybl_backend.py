@@ -15,6 +15,7 @@ import pandapower as pdp
 import pypowsybl as ppow
 import scipy
 import copy
+import itertools
 from grid2op.dtypes import dt_int, dt_float, dt_bool
 from grid2op.Backend.backend import Backend
 from grid2op.Exceptions import *
@@ -153,17 +154,18 @@ class PowsyblBackend(Backend):
         # ind = self._grid.get_generators(all_attributes=True).index[self._grid.get_generators(all_attributes=True)['min_p'].values < 0]
         # corresp = [0 for elem in range(len(ind))]
         # self._grid.update_generators(id=ind, min_p=corresp)
-
+        
+        lines = self._grid.get_lines(all_attributes=True)
         self.__nb_bus_before = self._grid.get_buses().shape[0]
-        self.__nb_powerline = copy.deepcopy(
-            self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0].shape[0])
+        self.__nb_powerline = copy.deepcopy(lines[lines["r"] != 0].shape[0])
         self._init_bus_load = self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].values
         self._init_bus_gen = self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].values
-        self._init_bus_lor = self._grid.get_lines(all_attributes=True)["bus_breaker_bus1_id"].values
-        self._init_bus_lex = self._grid.get_lines(all_attributes=True)["bus_breaker_bus2_id"].values
+        self._init_bus_lor = lines["bus_breaker_bus1_id"].values
+        self._init_bus_lex = lines["bus_breaker_bus2_id"].values
 
-        t_for = self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus1_id"].values
-        t_fex = self._grid.get_2_windings_transformers(all_attributes=True)["bus_breaker_bus2_id"].values
+        winding_transfo = self._grid.get_2_windings_transformers(all_attributes=True)
+        t_for = winding_transfo["bus_breaker_bus1_id"].values
+        t_fex = winding_transfo["bus_breaker_bus2_id"].values
         self._init_bus_lor = np.concatenate((self._init_bus_lor, t_for))
         self._init_bus_lex = np.concatenate((self._init_bus_lex, t_fex))
 
@@ -190,7 +192,8 @@ class PowsyblBackend(Backend):
         self.name_load = np.array(self._grid.get_loads()["name"].index.to_list())
         self.n_sub = copy.deepcopy(
             self._grid.get_buses().shape[0])  # we give as an input the number of buses that seems to be corresponding to substations in Grid2op
-        self.name_sub = np.array(["sub_{}".format(i) for i in self._pypowsbyl_bus_name_utility_fct(self._grid)])
+        self.topo_per_elem = self._pypowsbyl_bus_name_utility_fct(self._grid)
+        self.name_sub = np.array(["sub_{}".format(i) for i in self.topo_per_elem])
 
         self.n_storage = copy.deepcopy(self._grid.get_batteries().shape[0])
 
@@ -340,13 +343,17 @@ class PowsyblBackend(Backend):
 
         cpt = 0
         self.thermal_limit_a = np.full(self.n_line, fill_value=1000000, dtype=dt_float)
+        operational_limits = self._grid.get_operational_limits()
+        current_operational_limits = operational_limits[np.array(self._grid.get_operational_limits()["type"] == "CURRENT")]
+        current_and_dur_operational_limits = operational_limits[np.array(self._grid.get_operational_limits()["acceptable_duration"] == -1) & #If this is a permanent limitation, we are not going to take into account other type of limitation
+                        np.array(self._grid.get_operational_limits()["type"] == "CURRENT")]
         for elem in self.name_line:
-            if elem in self._grid.get_operational_limits()[np.array(self._grid.get_operational_limits()["type"] == "CURRENT")]:
+            if elem in current_operational_limits:
                 lim_list = []
-                for line_side in self._grid.get_operational_limits()[
-                    np.array(self._grid.get_operational_limits()["acceptable_duration"] == -1) & #If this is a permanent limitation, we are not going to take into account other type of limitation
-                        np.array(self._grid.get_operational_limits()["type"] == "CURRENT")].iterrows():#If this is a limitation on current
-                            lim_list.append(line_side[1]["value"])
+                #If this is a permanent limitation, we are not going to take into account other type of limitation
+                #If this is a limitation on current
+                for line_side in current_and_dur_operational_limits.iterrows():
+                    lim_list.append(line_side[1]["value"])
                 limit = min(lim_list)
                 self.thermal_limit_a[cpt] = limit
             cpt += 1
@@ -799,20 +806,24 @@ class PowsyblBackend(Backend):
                     self.load_v[:],
                     self.load_theta[:],
                 ) = self._loads_info()
+                
+                branches = self._grid.get_branches()
+                branches_bus1 = branches['bus1_id'] 
+                branches_bus2 = branches['bus2_id']
 
                 self.p_or[:] = self._aux_get_line_info("p1")
                 self.q_or[:] = self._aux_get_line_info("q1")
-                self.v_or[:] = self._aux_get_voltage_info(self._grid.get_branches()['bus1_id'])
+                self.v_or[:] = self._aux_get_voltage_info(branches_bus1)
                 self.a_or[:] = self._aux_get_line_info("i1")
-                self.theta_or[:] = self._aux_get_theta_info(self._grid.get_branches()['bus1_id'])
+                self.theta_or[:] = self._aux_get_theta_info(branches_bus1)
                 self.a_or[~np.isfinite(self.a_or)] = 0.0
                 self.v_or[~np.isfinite(self.v_or)] = 0.0
 
                 self.p_ex[:] = self._aux_get_line_info("p2")
                 self.q_ex[:] = self._aux_get_line_info("q2")
-                self.v_ex[:] = self._aux_get_voltage_info(self._grid.get_branches()['bus2_id'])
+                self.v_ex[:] = self._aux_get_voltage_info(branches_bus2)
                 self.a_ex[:] = self._aux_get_line_info("i2")
-                self.theta_ex[:] = self._aux_get_theta_info(self._grid.get_branches()['bus2_id'])
+                self.theta_ex[:] = self._aux_get_theta_info(branches_bus2)
                 self.a_ex[~np.isfinite(self.a_ex)] = 0.0
                 self.v_ex[~np.isfinite(self.v_ex)] = 0.0
 
@@ -860,12 +871,14 @@ class PowsyblBackend(Backend):
         return self.line_status
 
     def _get_line_status(self):
-        connected_1_lines = self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0]['connected1']
-        connected_2_lines = self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0]['connected2']
+        lines = self._grid.get_lines(all_attributes=True)
+        connected_1_lines = lines[lines["r"] != 0]['connected1']
+        connected_2_lines = lines[lines["r"] != 0]['connected2']
         line_connected = connected_1_lines.values & connected_2_lines.values
 
-        connected_1_2_transfo = pd.concat([self._grid.get_2_windings_transformers()['connected1'], self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0]['connected1']])
-        connected_2_2_transfo = pd.concat([self._grid.get_2_windings_transformers()['connected2'], self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0]['connected2']])
+        windings_transfo = self._grid.get_2_windings_transformers()
+        connected_1_2_transfo = pd.concat([windings_transfo['connected1'], lines[lines["r"] == 0]['connected1']])
+        connected_2_2_transfo = pd.concat([windings_transfo['connected2'], lines[lines["r"] == 0]['connected2']])
         transfo_2_connected = connected_1_2_transfo.values & connected_2_2_transfo.values
 
         # We do not take into account 3 windings transfos for the moment
@@ -876,25 +889,15 @@ class PowsyblBackend(Backend):
                 transfo_2_connected,
             )
         ).astype(dt_bool)
-
+        
     def _aux_get_voltage_info(self, elements):
         buses = self._grid.get_buses()['v_mag']
-        v_list = []
-        for elem in elements:
-            if elem == '':
-                v_list.append(0)
-            else:
-                v_list.append(buses[elem])
+        v_list = [buses[elt] if elt != '' else 0 for elt in elements]
         return v_list
 
     def _aux_get_theta_info(self, elements):
         buses = self._grid.get_buses()['v_angle']
-        v_list = []
-        for elem in elements:
-            if elem == '':
-                v_list.append(0)
-            else:
-                v_list.append(buses[elem])
+        v_list = [buses[elt] if elt != '' else 0 for elt in elements]
         return v_list
 
     def get_topo_vect(self):
@@ -1072,11 +1075,13 @@ class PowsyblBackend(Backend):
         super().assert_grid_correct()
 
     def _aux_get_line_info(self, colname):
+        lines = self._grid.get_lines(all_attributes=True)
+        winding_transfo = self._grid.get_2_windings_transformers(all_attributes=True)
         res = np.concatenate(
             (
-                self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0][colname].values,
-                self._grid.get_2_windings_transformers(all_attributes=True)[colname].values,
-                self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0][colname].values,
+                lines[lines["r"] != 0][colname].values,
+                winding_transfo[colname].values,
+                lines[lines["r"] == 0][colname].values,
             )
         )
         return res
@@ -1086,10 +1091,9 @@ class PowsyblBackend(Backend):
         Allows to retrieve the same order as in pandapower with json files, because some transformers (the one with low
         voltage and not any tap change possible) are considered as lines by pypowsybl
         """
-        return self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] != 0], \
-            pd.concat([self._grid.get_2_windings_transformers(all_attributes=True),
-                       self._grid.get_lines(all_attributes=True)[self._grid.get_lines(all_attributes=True)["r"] == 0]],
-                      join='inner')
+        lines = self._grid.get_lines(all_attributes=True)
+        return lines[lines["r"] != 0], \
+            pd.concat([self._grid.get_2_windings_transformers(all_attributes=True), lines[lines["r"] == 0]], join='inner')
 
     def sub_from_bus_id(self, bus_id):
         # TODO check that the function is doing what we want
@@ -1163,10 +1167,13 @@ class PowsyblBackend(Backend):
         res: :class:`List`
             List of all the buses in format bus_breaker_topology
         """
-        L = []
-        for elem in grid.get_voltage_levels().index:
-            for bus_id in grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index:
-                L.append(bus_id)
+        vol_levels = [list(grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index) for elem in grid.get_voltage_levels().index]
+        L = list(itertools.chain.from_iterable(vol_levels))
+        #L = [bus_id for elem in grid.get_voltage_levels().index for bus_id in grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index]
+        #L = []
+        #for elem in grid.get_voltage_levels().index:
+        #    for bus_id in grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index:
+        #        L.append(bus_id)
         return L
 
     def _double_buses(self):
@@ -1176,13 +1183,14 @@ class PowsyblBackend(Backend):
         :return:
         """
         df = self._grid.get_buses()
-        L = []
-        for elem in self._grid.get_voltage_levels().index:
-            for bus_id in self._grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index:
-                L.append(bus_id)
+        #L = self._pypowsbyl_bus_name_utility_fct(self._grid)
+        #L = []
+        #for elem in grid.get_voltage_levels().index:
+        #    for bus_id in self._grid.get_bus_breaker_topology(voltage_level_id=elem).buses.index:
+        #        L.append(bus_id)
         L_voltage_id = df['voltage_level_id'].to_list()
-        for i in range(len(L)):
-            self._grid.create_buses(id=L[i] + BUS_EXTENSION, voltage_level_id=L_voltage_id[i], name=df['name'][i])
+        for i in range(len(self.topo_per_elem)):
+            self._grid.create_buses(id=self.topo_per_elem[i] + BUS_EXTENSION, voltage_level_id=L_voltage_id[i], name=df['name'][i])
 
     def move_buses(self, equipment_name, bus_or, bus_dest):
         """
