@@ -11,15 +11,10 @@ readme = "README.md"
 packages = [{include = "pypowsybl_grid2opbackend"}]
 
 [tool.poetry.dependencies]
-python = "^3.9"
-jupyter = "^1.0.0"
-grid2op = "^1.8.1"
-matplotlib = "^3.7.1"
-gym = "^0.26.2"
-pypowsybl = "^0.22.0"
-plotly = "^5.15.0"
-imageio = "^2.31.1"
-
+python = "^3.10"
+grid2op = "^1.9.6"
+pypowsybl = "^0.23.0.dev1" # Local installation following grid2op maybe this should be removd from .toml and install by pip
+pandapower = "^2.13.1"
 
 [build-system]
 requires = ["poetry-core"]
