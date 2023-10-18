@@ -27,6 +27,83 @@ from src.Backend.network import load as load_ppow_network
 BUS_EXTENSION = '_dummy'
 
 class PowsyblBackend(Backend):
+    """
+    This is a class that is designed to ease the interaction between pypowsybl and grid2op.
+
+    This backend currently does not work with 3 windings transformers, storages and other exotic objects (It could be
+    achieved with pypowsybl but the integration is not properly set with grid2op)
+
+    Attributes
+    ----------
+    p_or: :class:`numpy.array`, dtype:float
+        The active power flowing at the origin end of each powerline
+
+    q_or: :class:`numpy.array`, dtype:float
+        The reactive power flowing at the origin end of each powerline
+
+    v_or: :class:`numpy.array`, dtype:float
+        The voltage magnitude at the origin bus of the powerline
+
+    theta_or: :class:`numpy.array`, dtype:float
+        The voltage angle at the origin bus of the powerline
+
+    a_or: :class:`numpy.array`, dtype:float
+        The current flowing at the origin end of each powerline
+
+    p_ex: :class:`numpy.array`, dtype:float
+        The active power flowing at the extremity end of each powerline
+
+    q_ex: :class:`numpy.array`, dtype:float
+        The reactive power flowing at the extremity end of each powerline
+
+    v_ex: :class:`numpy.array`, dtype:float
+        The voltage magnitude at the extremity bus of the powerline
+
+    theta_ex: :class:`numpy.array`, dtype:float
+        The voltage angle at the extremity bus of the powerline
+
+    a_ex: :class:`numpy.array`, dtype:float
+        The current flowing at the extremity end of each powerline
+
+    load_p: :class:`numpy.array`, dtype:float
+        The result active load consumption, it is NaN if no loadflow has been computed (MW)
+
+    load_q: :class:`numpy.array`, dtype:float
+        The result reactive load consumption, it is NaN if no loadflow has been computed (MVAr)
+
+    load_v: :class:`numpy.array`, dtype:float
+        The voltage magnitude at the bus where each load is connected
+
+    load_theta: :class:`numpy.array`, dtype:float
+        The voltage angle at the bus where each load is connected
+
+    prod_p: :class:`numpy.array`, dtype:float
+        The actual active production of the generator, NaN if no loadflow has been computed (MW)
+
+    prod_q: :class:`numpy.array`, dtype:float
+        The actual reactive production of the generator, NaN if no loadflow has been computed (MVAr)
+
+    prod_v: :class:`numpy.array`, dtype:float
+        The voltage magnitude at the bus where each generator is connected
+
+    gen_theta: :class:`numpy.array`, dtype:float
+        The voltage angle at the bus where each generator is connected
+
+    Examples
+    ---------
+    The only recommended way to use this class is by passing an instance of a Backend into the "make"
+    function of grid2op. Do not attempt to use a backend outside of this specific usage.
+
+    .. code-block:: python
+
+            import grid2op
+            from src.Backend.powsybl_backend import PowsyblBackend
+            backend = PowsyblBackend()
+
+            env = grid2op.make(backend=backend)
+            # and use "env" as any open ai gym environment.
+
+    """
 
     def __init__(
             self,
@@ -106,9 +183,19 @@ class PowsyblBackend(Backend):
 
     def load_grid(self, path, filename=None):
         """
-          Regarding the type of entry file (.json designed for pandapower or .xiidm for pypowsybl) we use different kind
-         of loading to be sure that our network is loaded properly.
-         """
+        Regarding the type of entry file (.json designed for pandapower, .mat for matpower  or .xiidm for pypowsybl)
+        we use different kind of loading to be sure that our network is loaded properly.
+
+        Parameters
+        ----------
+        path : str
+            The path to the folder where the grid file is
+        filename : str
+            The name of the grid file
+        Returns
+        -------
+        """
+
         if path is None and filename is None:
             raise RuntimeError(
                 "You must provide at least one of path or file to load a powergrid."
@@ -248,7 +335,8 @@ class PowsyblBackend(Backend):
 
         I also create some mapping dictionaries to be able to translate bus naming from Grid2op to pypowsybl and vice
         versa
-        :return:
+        Returns
+        -------
         """
         self.sub_info = np.zeros(self.n_sub, dtype=dt_int)
         self.load_to_subid = np.zeros(self.n_load, dtype=dt_int)
@@ -550,12 +638,17 @@ class PowsyblBackend(Backend):
              - new_bus_backend<0 : this means that we want to disconnect the load from the bus
              - new_bus_backend>=0 : the load will be connected to the correspondant bus.
 
-         Args
-         ------
-             :param new_bus: id of the given new bus in local substation way
-             :param id_el_backend: id of the specific load in the backend
+        Parameters
+        ----------
+        new_bus: int
+            id of the given new bus in local substation way, could only be 1 or 2
+        id_el_backend: int
+            id of the specific load in the backend
 
-         """
+        Returns
+        -------
+
+        """
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_load[id_el_backend]]
         )
@@ -571,16 +664,20 @@ class PowsyblBackend(Backend):
 
     def _apply_gen_bus(self, new_bus, id_el_backend):
         """
-        Change gen bus.
-        If :
-            - new_bus_backend<0 : this means that we want to disconnect the gen from the bus
-            - new_bus_backend>=0 : the gen will be connected to the correspondant bus.
+         Change gen bus.
+         If :
+             - new_bus_backend<0 : this means that we want to disconnect the load from the bus
+             - new_bus_backend>=0 : the load will be connected to the correspondant bus.
 
-        Args
-        ------
-            :param new_bus: id of the given new bus in local substation way
-            :param id_el_backend: id of the specific gen in the backend
+        Parameters
+        ----------
+        new_bus: int
+            id of the given new bus in local substation way, could only be 1 or 2
+        id_el_backend: int
+            id of the specific gen in the backend
 
+        Returns
+        -------
         """
         new_bus_backend = type(self).local_bus_to_global_int(
             new_bus, self.map_sub[self._init_bus_gen[id_el_backend]]
@@ -607,11 +704,15 @@ class PowsyblBackend(Backend):
             - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
             - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
 
-        Args
-        ------
-            :param id_powerline_backend: id of the given line in the backend
-            :param new_bus_backend: id of the new bus for the line to be connected to
+        Parameters
+        ----------
+        id_powerline_backend: int
+            id of the given line in the backend
+        new_bus_backend: int
+            id of the new bus for the line to be connected to
 
+        Returns
+        -------
         """
         equipment_name = self.name_line[id_powerline_backend]
         if new_bus_backend >= 0:
@@ -636,11 +737,15 @@ class PowsyblBackend(Backend):
             - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
             - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
 
-        Args
-        ------
-            :param id_powerline_backend: id of the given line in the backend
-            :param new_bus_backend: id of the new bus for the line to be connected to
+        Parameters
+        ----------
+        id_powerline_backend: int
+            id of the given line in the backend
+        new_bus_backend: int
+            id of the new bus for the line to be connected to
 
+        Returns
+        -------
         """
 
         equipment_name = self.name_line[id_powerline_backend]
@@ -668,11 +773,15 @@ class PowsyblBackend(Backend):
             - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
             - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
 
-        Args
-        ------
-            :param id_powerline_backend: id of the given transfo in the backend
-            :param new_bus_backend: id of the new bus for the transfo to be connected to
+        Parameters
+        ----------
+        id_powerline_backend: int
+            id of the given transfo in the backend
+        new_bus_backend: int
+            id of the new bus for the transfo to be connected to
 
+        Returns
+        -------
         """
         # TODO by convention I observed that hv are connected on bus_1 but need to be checked and otherwise do some improvment
         equipment_name = self.name_line[id_powerline_backend]
@@ -715,11 +824,15 @@ class PowsyblBackend(Backend):
             - new_bus_backend<0 : this means that we want to disconnect the transfo from the bus
             - new_bus_backend>=0 : the transfo will be connected to the correspondant bus.
 
-        Args
-        ------
-            id_powerline_backend: id of the given transfo in the backend
-            new_bus_backend: id of the new bus for the transfo to be connected to
+        Parameters
+        ----------
+        id_powerline_backend: int
+            id of the given transfo in the backend
+        new_bus_backend: int
+            id of the new bus for the transfo to be connected to
 
+        Returns
+        -------
         """
         # TODO by convention I observed that lv are connected on bus_2 but need to be checked and otherwise do some improvment
 
@@ -866,7 +979,7 @@ class PowsyblBackend(Backend):
         """
 
         As all the functions related to powerline, pypowsybl split them into multiple objects to access with separated
-        getters (some for transformers, some for 3 winding transformers etc.). We make sure to get them all here.
+        getters (some for transformers, some for lines etc.). We make sure to get them all here.
         """
         return self.line_status
 
@@ -1158,9 +1271,10 @@ class PowsyblBackend(Backend):
         """
         Function use to access all the name of the buses in bus_breaker_topology way.
 
-        Args
-        ------
-        :param grid: Pypowsybl grid
+        Parameters
+        ----------
+        grid
+            Pypowsybl grid object
 
         Returns
         -------
@@ -1180,8 +1294,10 @@ class PowsyblBackend(Backend):
         """
         Double the buses in the pypowybl backend to ensure that Grid2op framework is working as desired. Modifies
         directly the underlying grid.
-        :return:
+        Returns
+        -------
         """
+
         df = self._grid.get_buses()
         #L = self._pypowsbyl_bus_name_utility_fct(self._grid)
         #L = []
@@ -1197,11 +1313,16 @@ class PowsyblBackend(Backend):
         Function use to call the move_connectable method for every kind of powsybl object. I use self.map_sub_invert to
         get the name of the destination bus in pypowsybl norm (not Grid2op)
 
-        :param equipment_name: Name of the equipment in pypowsybl backend context
-
-        :param bus_or: The name of the origin bus in pypowsybl backend context
-
-        :param bus_dest: The name of the destination bus in Grid2op context
+        Parameters
+        ----------
+        equipment_name: str
+            Name of the equipment in pypowsybl backend context
+        bus_or: str
+            The name of the origin bus in pypowsybl backend context
+        bus_dest: str
+            The name of the destination bus in Grid2op context
+        Returns
+        -------
 
         """
 
