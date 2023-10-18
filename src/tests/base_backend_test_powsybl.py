@@ -14,8 +14,6 @@ import copy
 from abc import ABC, abstractmethod
 import inspect
 
-from grid2op.Action import CompleteAction
-
 try:
     # this is only available starting python 3.7 or 3.8... tests are with python 3.6 :-(
     from math import comb

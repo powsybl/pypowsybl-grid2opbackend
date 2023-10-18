@@ -8,39 +8,20 @@
 # Grid2op framework. Most parts of code have been paste/copy.
 
 import unittest
-
 import os
 from pathlib import Path
 from src.Backend.powsybl_backend import PowsyblBackend
-
-from grid2op.tests.helper_path_test import PATH_DATA_TEST_PP, PATH_DATA_TEST
 from grid2op.tests.helper_path_test import HelperTests
-from src.tests.base_backend_test_powsybl import BaseTestNames
 from src.tests.base_backend_test_powsybl import BaseTestLoadingCase
 from src.tests.base_backend_test_powsybl import BaseTestLoadingBackendFunc
 from src.tests.base_backend_test_powsybl import BaseTestTopoAction
-
-from grid2op.tests.BaseBackendTest import BaseTestEnvPerformsCorrectCascadingFailures
-from grid2op.tests.BaseBackendTest import BaseTestChangeBusAffectRightBus
-from grid2op.tests.BaseBackendTest import BaseTestShuntAction
-from grid2op.tests.BaseBackendTest import BaseTestResetEqualsLoadGrid
-from grid2op.tests.BaseBackendTest import BaseTestVoltageOWhenDisco
-from grid2op.tests.BaseBackendTest import BaseTestChangeBusSlack
-from grid2op.tests.BaseBackendTest import BaseIssuesTest
-from grid2op.tests.BaseBackendTest import BaseStatusActions
-from grid2op.tests.BaseBackendTest import BaseTestStorageAction
+import warnings
+warnings.simplefilter("error")
 
 test_dir = Path(__file__).parent.absolute()
 implementation_dir = os.fspath(test_dir.parent.absolute())
 data_dir = os.path.abspath(os.path.join(implementation_dir, "data_test"))
 PATH_DATA_TEST_PYPOW = data_dir
-
-PATH_DATA_TEST_INIT = PATH_DATA_TEST
-#PATH_DATA_TEST = PATH_DATA_TEST_PP
-
-import warnings
-
-warnings.simplefilter("error")
 
 
 class TestLoadingCase(HelperTests, BaseTestLoadingCase):
@@ -50,19 +31,10 @@ class TestLoadingCase(HelperTests, BaseTestLoadingCase):
         )
 
     def get_path(self):
-        return PATH_DATA_TEST_PYPOW #PATH_DATA_TEST_PP #PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
+        return PATH_DATA_TEST_PYPOW
 
     def get_casefile(self):
-        return "grid.json"#"test_case14.json" #"test_case14.xiidm" #"case14_realistic_test.mat"
-
-# class TestNames(HelperTests, BaseTestNames):
-#     def make_backend(self, detailed_infos_for_cascading_failures=False):
-#         return PowsyblBackend(
-#             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
-#         )
-
-#     def get_path(self):
-#         return PATH_DATA_TEST
+        return "grid.json"
 
 
 class TestLoadingBackendFunc(HelperTests, BaseTestLoadingBackendFunc):
@@ -80,10 +52,10 @@ class TestLoadingBackendFunc(HelperTests, BaseTestLoadingBackendFunc):
         )
 
     def get_path(self):
-        return PATH_DATA_TEST_PYPOW #PATH_DATA_TEST_PP #PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
+        return PATH_DATA_TEST_PYPOW
 
     def get_casefile(self):
-        return "grid.json"#"test_case14.json"  #"test_case14.xiidm"
+        return "grid.json"
 
 
 class TestTopoAction(HelperTests, BaseTestTopoAction):
@@ -100,10 +72,10 @@ class TestTopoAction(HelperTests, BaseTestTopoAction):
         )
 
     def get_path(self):
-        return PATH_DATA_TEST_PYPOW #PATH_DATA_TEST_PP #PATH_DATA_TEST #PATH_DATA_TEST_PYPOW
+        return PATH_DATA_TEST_PYPOW
 
     def get_casefile(self):
-        return "grid.json"#"test_case14.json"  #"test_case14.xiidm"
+        return "grid.json"
 
 if __name__ == "__main__":
     unittest.main()
