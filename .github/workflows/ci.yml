@@ -54,12 +54,13 @@ jobs:
           git clone --recursive https://github.com/powsybl/pypowsybl.git
           ls
           cd pypowsybl 
+          git fetch
           git checkout move_connectable_prototype
-          cd ..
-          export JAVA_HOME=<graalvm>
+          export JAVA_HOME=<../../graalvm>
           pip3 install --upgrade setuptools pip
           pip3 install -r requirements.txt
           pip install .
+          cd ..
 
       - name: Install dependencies
         run: pip3 install -r requirements.txt
