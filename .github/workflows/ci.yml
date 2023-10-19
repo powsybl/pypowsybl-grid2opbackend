@@ -32,7 +32,14 @@ jobs:
 
     steps:
       - name: Install Linux packages
-        run: yum install -y zlib-devel.x86_64
+        run: yum install -y zlib-devel.x86_64 wget
+
+      - name: Maven
+        run: |
+          wget https://downloads.apache.org/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz
+          tar -zxvf apache-maven-3.9.5-bin.tar.gz
+          mv apache-maven-3.9.5 maven
+          export M2_HOME="$(pwd)/maven"
 
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
@@ -53,13 +60,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
-
-      - name: Maven
-        run: |
-          wget https://downloads.apache.org/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz
-          tar -zxvf apache-maven-3.9.5-bin.tar.gz
-          mv apache-maven-3.9.5 maven
-          export M2_HOME="$(pwd)/maven"
 
       - name: Vision of folder
         run: |
