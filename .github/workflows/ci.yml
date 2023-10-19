@@ -54,8 +54,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Vision of folder
-        run: ls -la /usr/lib
+#      - name: Vision of folder
+#        run: ls -la /usr/lib
 
       - name: Setup path
         run: echo "/opt/python/${{ matrix.python.name }}-${{ matrix.python.abi }}/bin/" >> $GITHUB_PATH
@@ -63,7 +63,6 @@ jobs:
       - name: Specific install for pypowsybl branch
         run: |
           git clone --recursive https://github.com/powsybl/pypowsybl.git
-          export JAVA_HOME="/usr/lib/graalvm"
           ls
           cd pypowsybl 
           git fetch
