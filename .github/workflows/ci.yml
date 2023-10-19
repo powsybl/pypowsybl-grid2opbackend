@@ -41,6 +41,7 @@ jobs:
           mv apache-maven-3.9.5 maven
           export M2_HOME="$(pwd)/maven"
           M2=$M2_HOME/bin
+          export PATH=$M2:$PATH
 
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
