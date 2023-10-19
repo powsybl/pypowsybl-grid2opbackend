@@ -54,14 +54,17 @@ jobs:
         with:
           submodules: true
 
-#      - name: Vision of folder
-#        run: ls -la /usr/lib
+      - name: Vision of folder
+        run: |
+          ls -la /usr/lib
+          ls -la /usr/local
 
       - name: Setup path
         run: echo "/opt/python/${{ matrix.python.name }}-${{ matrix.python.abi }}/bin/" >> $GITHUB_PATH
 
       - name: Specific install for pypowsybl branch
         run: |
+          export mvn=
           git clone --recursive https://github.com/powsybl/pypowsybl.git
           cd pypowsybl 
           git fetch
