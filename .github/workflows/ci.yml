@@ -55,7 +55,7 @@ jobs:
           submodules: true
 
       - name: Vision of folder
-        runs: ls -la /usr/lib
+        run: ls -la /usr/lib
 
       - name: Setup path
         run: echo "/opt/python/${{ matrix.python.name }}-${{ matrix.python.abi }}/bin/" >> $GITHUB_PATH
