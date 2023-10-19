@@ -41,8 +41,10 @@ jobs:
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install of Cmake
-        run: yum -y install cmake
+      - name: Install of Clang and Cmake
+        run: |
+          yum -y install clang
+          yum -y install cmake
 
       - name: Checkout sources
         uses: actions/checkout@v3
