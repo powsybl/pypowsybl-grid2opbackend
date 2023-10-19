@@ -40,7 +40,6 @@ jobs:
           java-version: '17'
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-        run: export JAVA_HOME="/usr/lib/graalvm"
 
       - name: Install Maven
         run: yum -y install maven
@@ -61,6 +60,7 @@ jobs:
       - name: Specific install for pypowsybl branch
         run: |
           git clone --recursive https://github.com/powsybl/pypowsybl.git
+          export JAVA_HOME="/usr/lib/graalvm"
           ls
           cd pypowsybl 
           git fetch
