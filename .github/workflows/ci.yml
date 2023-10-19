@@ -40,6 +40,7 @@ jobs:
           tar -zxvf apache-maven-3.9.5-bin.tar.gz
           mv apache-maven-3.9.5 maven
           export M2_HOME="$(pwd)/maven"
+          M2=$M2_HOME/bin
 
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
