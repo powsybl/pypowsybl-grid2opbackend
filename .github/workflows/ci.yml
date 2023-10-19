@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Install Linux packages
-        run: yum install -y zlib-devel.x86_64 wget
+        run: yum install -y rh-maven33-maven zlib-devel.x86_64 wget
 
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
@@ -50,8 +50,6 @@ jobs:
           export M2=$M2_HOME/bin
           export PATH=$M2:$PATH
           mvn --version
-#      - name: Install Maven
-#        run: yum -y install maven
 
       - name: Install of Clang and Cmake
         run: |
