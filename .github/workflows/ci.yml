@@ -56,13 +56,10 @@ jobs:
 
       - name: Maven
         run: |
-          cd
-          cd opt
-          wget https://downloads.apache.org/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz
+          wget https://downloads.apache.org/maven/maven-3/3.9.1/binaries/apache-maven-3.9.1-bin.tar.gz
           tar -zxvf apache-maven-3.6.3-bin.tar.gz
           mv apache-maven-3.6.3 maven
-          export M2_HOME=/opt/maven
-          mv --version
+          export M2_HOME=./maven
 
       - name: Vision of folder
         run: |
