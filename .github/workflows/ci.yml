@@ -41,6 +41,9 @@ jobs:
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install of Cmake
+        run: sudo apt-get -y install cmake
+
       - name: Checkout sources
         uses: actions/checkout@v3
         with:
