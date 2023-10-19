@@ -14,21 +14,21 @@ jobs:
     strategy:
       matrix:
         python:
-          - {
-            name: cp39,
-            abi: cp39,
-            version: '3.9',
-          }
+#          - {
+#            name: cp39,
+#            abi: cp39,
+#            version: '3.9',
+#          }
           - {
             name: cp310,
             abi: cp310,
             version: '3.10',
           }
-          - {
-            name: cp311,
-            abi: cp311,
-            version: '3.11',
-          }
+#          - {
+#            name: cp311,
+#            abi: cp311,
+#            version: '3.11',
+#          }
 
     steps:
       - name: Install Linux packages
@@ -51,7 +51,11 @@ jobs:
 
       - name: Specific install for pypowsybl branch
         run: |
-          git clone --recursive https://github.com/powsybl/pypowsybl.git@move_connectable_prototype
+          git clone --recursive https://github.com/powsybl/pypowsybl.git
+          ls
+          cd pypowsybl 
+          git checkout move_connectable_prototype
+          cd ..
           export JAVA_HOME=<graalvm>
           pip3 install --upgrade setuptools pip
           pip3 install -r requirements.txt
