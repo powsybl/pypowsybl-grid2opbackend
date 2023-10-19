@@ -56,9 +56,9 @@ jobs:
 
       - name: Maven
         run: |
-          wget https://downloads.apache.org/maven/maven-3/3.9.1/binaries/apache-maven-3.9.1-bin.tar.gz
-          tar -zxvf apache-maven-3.9.1-bin.tar.gz
-          mv apache-maven-3.9.1 maven
+          wget https://downloads.apache.org/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz
+          tar -zxvf apache-maven-3.9.5-bin.tar.gz
+          mv apache-maven-3.9.5 maven
           export M2_HOME="$(pwd)/maven"
 
       - name: Vision of folder
