@@ -41,8 +41,8 @@ jobs:
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Maven
-        run: yum -y install maven
+#      - name: Install Maven
+#        run: yum -y install maven
 
       - name: Install of Clang and Cmake
         run: |
