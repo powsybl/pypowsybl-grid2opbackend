@@ -40,8 +40,9 @@ jobs:
           tar -zxvf apache-maven-3.9.5-bin.tar.gz
           mv apache-maven-3.9.5 maven
           export M2_HOME="$(pwd)/maven"
-          M2=$M2_HOME/bin
+          export M2=$M2_HOME/bin
           export PATH=$M2:$PATH
+          mvn --version
 
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
@@ -65,7 +66,6 @@ jobs:
 
       - name: Vision of folder
         run: |
-          mvn --version
           ls -la /usr/lib
           ls -la /usr/local
 
