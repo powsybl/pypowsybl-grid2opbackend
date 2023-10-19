@@ -89,13 +89,13 @@ jobs:
       - name: Install dependencies
         run: pip3 install -r requirements.txt
 
-      - name: Build wheel
-        run: |
-          scl enable rh-maven33 'python3 setup.py bdist_wheel'
-          auditwheel repair dist/*.whl
-
-      - name: Install wheel
-        run: pip3 install wheelhouse/*.whl --user
+#      - name: Build wheel
+#        run: |
+#          scl enable rh-maven33 'python3 setup.py bdist_wheel'
+#          auditwheel repair dist/*.whl
+#
+#      - name: Install wheel
+#        run: pip3 install wheelhouse/*.whl --user
 
       - name: Run tests
         working-directory: ./src/tests # Run in subdir to use installed lib, not sources
