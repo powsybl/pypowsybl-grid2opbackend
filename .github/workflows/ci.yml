@@ -42,7 +42,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install of Cmake
-        run: sudo apt-get -y install cmake
+        run: yum -y install cmake
 
       - name: Checkout sources
         uses: actions/checkout@v3
