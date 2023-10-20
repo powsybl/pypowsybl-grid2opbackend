@@ -247,14 +247,8 @@ class PowsyblBackend(Backend):
         self.__nb_powerline = copy.deepcopy(lines[lines["r"] != 0].shape[0])
         self._init_bus_load = self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].values
         self._init_bus_gen = self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].values
-        self._init_bus_lor = lines["bus_breaker_bus1_id"].values
-        self._init_bus_lex = lines["bus_breaker_bus2_id"].values
-
-        winding_transfo = self._grid.get_2_windings_transformers(all_attributes=True)
-        t_for = winding_transfo["bus_breaker_bus1_id"].values
-        t_fex = winding_transfo["bus_breaker_bus2_id"].values
-        self._init_bus_lor = np.concatenate((self._init_bus_lor, t_for))
-        self._init_bus_lex = np.concatenate((self._init_bus_lex, t_fex))
+        self._init_bus_lor = self._aux_get_line_info("bus_breaker_bus1_id")
+        self._init_bus_lex = self._aux_get_line_info("bus_breaker_bus2_id")
 
         # and now initialize the attributes (see list bellow)
         if self._grid.get_3_windings_transformers().shape[0] > 0:
@@ -920,9 +914,8 @@ class PowsyblBackend(Backend):
                     self.load_theta[:],
                 ) = self._loads_info()
                 
-                branches = self._grid.get_branches()
-                branches_bus1 = branches['bus1_id'] 
-                branches_bus2 = branches['bus2_id']
+                branches_bus1 = self._aux_get_line_info('bus1_id')
+                branches_bus2 = self._aux_get_line_info('bus2_id')
 
                 self.p_or[:] = self._aux_get_line_info("p1")
                 self.q_or[:] = self._aux_get_line_info("q1")
@@ -1197,6 +1190,7 @@ class PowsyblBackend(Backend):
                 lines[lines["r"] == 0][colname].values,
             )
         )
+        # res = np.nan_to_num(res)
         return res
 
     def _return_real_lines_transfo(self):
