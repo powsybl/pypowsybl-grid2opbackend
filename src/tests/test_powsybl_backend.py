@@ -11,7 +11,7 @@ import unittest
 import os
 from pathlib import Path
 from src.Backend.powsybl_backend import PowsyblBackend
-from grid2op.tests.helper_path_test import HelperTests
+from src.tests.helper_path_test import HelperTests
 from src.tests.base_backend_test_powsybl import BaseTestLoadingCase
 from src.tests.base_backend_test_powsybl import BaseTestLoadingBackendFunc
 from src.tests.base_backend_test_powsybl import BaseTestTopoAction
