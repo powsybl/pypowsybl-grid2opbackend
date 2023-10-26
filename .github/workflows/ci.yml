@@ -41,16 +41,6 @@ jobs:
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-#      - name: Maven
-#        run: |
-#          wget https://downloads.apache.org/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz
-#          tar -zxvf apache-maven-3.9.5-bin.tar.gz
-#          mv apache-maven-3.9.5 maven
-#          export M2_HOME="$(pwd)/maven"
-#          export M2=$M2_HOME/bin
-#          export PATH=$M2:$PATH
-#          mvn --version
-
       - name: Install of Clang and Cmake
         run: |
           yum -y install clang
@@ -60,11 +50,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
-
-      - name: Vision of folder
-        run: |
-          ls -la /usr/lib
-          ls -la /usr/local
 
       - name: Setup path
         run: echo "/opt/python/${{ matrix.python.name }}-${{ matrix.python.abi }}/bin/" >> $GITHUB_PATH
