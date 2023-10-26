@@ -15,12 +15,21 @@ from src.tests.helper_path_test import HelperTests
 from src.tests.base_backend_test_powsybl import BaseTestLoadingCase
 from src.tests.base_backend_test_powsybl import BaseTestLoadingBackendFunc
 from src.tests.base_backend_test_powsybl import BaseTestTopoAction
+from src.tests.base_backend_test_powsybl import BaseTestEnvPerformsCorrectCascadingFailures
+from src.tests.base_backend_test_powsybl import BaseTestChangeBusAffectRightBus
+from src.tests.base_backend_test_powsybl import BaseTestShuntAction
+from src.tests.base_backend_test_powsybl import BaseTestResetEqualsLoadGrid
+from src.tests.base_backend_test_powsybl import BaseTestVoltageOWhenDisco
+from src.tests.base_backend_test_powsybl import BaseTestChangeBusSlack
+from src.tests.base_backend_test_powsybl import BaseIssuesTest
+from src.tests.base_backend_test_powsybl import BaseStatusActions
+from src.tests.base_backend_test_powsybl import BaseTestStorageAction
 import warnings
 warnings.simplefilter("error")
 
 test_dir = Path(__file__).parent.absolute()
 implementation_dir = os.fspath(test_dir.parent.absolute())
-data_dir = os.path.abspath(os.path.join(implementation_dir, "data_test"))
+data_dir = os.path.abspath(os.path.join(implementation_dir, "data_test\l2rpn_case14_sandbox_Pypowsybl"))
 PATH_DATA_TEST_PYPOW = data_dir
 
 
@@ -76,6 +85,131 @@ class TestTopoAction(HelperTests, BaseTestTopoAction):
 
     def get_casefile(self):
         return "grid.json"
+
+
+class TestEnvPerformsCorrectCascadingFailures(
+    HelperTests, BaseTestEnvPerformsCorrectCascadingFailures
+):
+    def setUp(self):
+        BaseTestEnvPerformsCorrectCascadingFailures.setUp(self)
+
+    def tearDown(self):
+        # TODO find something more elegant
+        BaseTestEnvPerformsCorrectCascadingFailures.tearDown(self)
+
+    def make_backend(self, detailed_infos_for_cascading_failures=False):
+        return PowsyblBackend(
+            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+        )
+
+    def get_casefile(self):
+        return "grid.json"
+
+    def get_path(self):
+        return PATH_DATA_TEST_PYPOW
+
+
+class TestChangeBusAffectRightBus(HelperTests, BaseTestChangeBusAffectRightBus):
+
+    def setUp(self):
+        BaseTestChangeBusAffectRightBus.setUp(self)
+    def make_backend(self, detailed_infos_for_cascading_failures=False):
+        return PowsyblBackend(
+            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+        )
+
+    def get_casefile(self):
+        return "grid.json"
+
+    def get_path(self):
+        return PATH_DATA_TEST_PYPOW
+
+# TODO work on shunt tests
+# class TestShuntAction(HelperTests, BaseTestShuntAction):
+#
+#     def setUp(self):
+#         BaseTestShuntAction.setUp(self)
+#
+#     def make_backend(self, detailed_infos_for_cascading_failures=False):
+#         return PowsyblBackend(
+#             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+#         )
+#
+#     def get_casefile(self):
+#         return "grid.json"
+#
+#     def get_path(self):
+#         return PATH_DATA_TEST_PYPOW
+
+class TestResetEqualsLoadGrid(HelperTests, BaseTestResetEqualsLoadGrid):
+    def setUp(self):
+        BaseTestResetEqualsLoadGrid.setUp(self)
+
+    def make_backend(self, detailed_infos_for_cascading_failures=False):
+        return PowsyblBackend(
+            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+        )
+
+    def get_casefile(self):
+        return "grid.json"
+
+    def get_path(self):
+        return PATH_DATA_TEST_PYPOW
+
+
+
+class TestVoltageOWhenDisco(HelperTests, BaseTestVoltageOWhenDisco):
+
+    def setUp(self):
+        BaseTestVoltageOWhenDisco.setUp(self)
+    def make_backend(self, detailed_infos_for_cascading_failures=False):
+        return PowsyblBackend(
+            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+        )
+
+    def get_casefile(self):
+        return "grid.json"
+
+    def get_path(self):
+        return PATH_DATA_TEST_PYPOW
+
+
+class TestChangeBusSlack(HelperTests, BaseTestChangeBusSlack):
+    def setUp(self):
+        BaseTestChangeBusSlack.setUp(self)
+    def make_backend(self, detailed_infos_for_cascading_failures=False):
+        return PowsyblBackend(
+            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+        )
+
+    def get_casefile(self):
+        return "grid.json"
+
+    def get_path(self):
+        return PATH_DATA_TEST_PYPOW
+
+
+# class TestIssuesTest(HelperTests, BaseIssuesTest):
+#     def make_backend(self, detailed_infos_for_cascading_failures=False):
+#         return PowsyblBackend(
+#             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+#         )
+
+
+class TestStatusAction(HelperTests, BaseStatusActions):
+
+    def setUp(self):
+        BaseStatusActions.setUp(self)
+    def make_backend(self, detailed_infos_for_cascading_failures=False):
+        return PowsyblBackend(
+            detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
+        )
+    def get_casefile(self):
+        return "grid.json"
+
+    def get_path(self):
+        return PATH_DATA_TEST_PYPOW
+
 
 if __name__ == "__main__":
     unittest.main()
