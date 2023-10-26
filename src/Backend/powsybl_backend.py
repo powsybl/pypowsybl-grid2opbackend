@@ -913,7 +913,13 @@ class PowsyblBackend(Backend):
                     self.load_v[:],
                     self.load_theta[:],
                 ) = self._loads_info()
-                
+
+                if not is_dc:
+                    if not np.all(np.isfinite(self.load_v)):
+                        # TODO see if there is a better way here
+                        # some loads are disconnected: it's a game over case!
+                        raise DivergingPowerFlow("Isolated load")
+
                 branches_bus1 = self._aux_get_line_info('bus1_id')
                 branches_bus2 = self._aux_get_line_info('bus2_id')
 
