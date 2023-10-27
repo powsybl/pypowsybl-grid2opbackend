@@ -32,11 +32,15 @@ class SortedNetwork(Network):
 
     def deepcopy(self):
         network_copy = copy.deepcopy(self)
-        network_copy._loads_index = self._loads_index
+        if hasattr(self, '_loads_index'):
+            setattr(network_copy, '_loads_index', self._loads_index)
+        # network_copy._loads_index = self._loads_index
         return network_copy
 
     def get_loads(self, *args, **kwargs):
-        if self._loads_index is None:
+        if not hasattr(self, '_loads_index'):
+            return super(SortedNetwork, self).get_loads(*args, **kwargs)
+        elif self._loads_index is None:
             return super(SortedNetwork, self).get_loads(*args, **kwargs)
         else:
             return super(SortedNetwork, self).get_loads(*args, **kwargs).loc[self._loads_index, :]

@@ -181,6 +181,8 @@ class PowsyblBackend(Backend):
             None  # number of powerline (real powerline, not transformer)
         )
 
+        self._pf_init = ppow._pypowsybl.VoltageInitMode.DC_VALUES
+
     def load_grid(self, path, filename=None):
         """
         Regarding the type of entry file (.json designed for pandapower, .mat for matpower  or .xiidm for pypowsybl)
