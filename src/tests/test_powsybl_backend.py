@@ -29,7 +29,7 @@ warnings.simplefilter("error")
 
 test_dir = Path(__file__).parent.absolute()
 implementation_dir = os.fspath(test_dir.parent.absolute())
-data_dir = os.path.abspath(os.path.join(implementation_dir, "data_test/l2rpn_case14_sandbox_Pypowsybl"))
+data_dir = os.path.abspath(os.path.join(implementation_dir, os.path.join("data_test", "l2rpn_case14_sandbox_Pypowsybl")))
 PATH_DATA_TEST_PYPOW = data_dir
 
 
