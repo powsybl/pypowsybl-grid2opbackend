@@ -15,6 +15,8 @@ python = "^3.10"
 grid2op = "^1.9.5"
 pypowsybl = "^0.23.0.dev1" # Local installation following grid2op maybe this should be removd from .toml and install by pip
 pandapower = "^2.13.1"
+l2rpn-baselines = "^0.8.0"
+stable-baselines3 = "^2.1.0"
 
 [build-system]
 requires = ["poetry-core"]
