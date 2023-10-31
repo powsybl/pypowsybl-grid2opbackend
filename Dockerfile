@@ -1,10 +1,12 @@
 FROM python:3.10.13-bullseye
 
-RUN apt update && apt install  bash wget zlib1g cmake clang curl git zip tar -y && \
-    curl -s "https://get.sdkman.io" | bash
-RUN bash -c "source $HOME/.sdkman/bin/sdkman-init.sh && yes | sdk install java 17.0.9-graal"\
-    && export JAVA_HOME=graalvm/
-RUN wget https://downloads.apache.org/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz\
+RUN apt update && apt install bash wget zlib1g cmake clang curl git zip tar -y
+RUN wget https://download.oracle.com/graalvm/17/latest/graalvm-jdk-17_linux-x64_bin.tar.gz\
+    &&  tar -xzf graalvm-jdk-17_linux-x64_bin.tar.gz
+
+RUN export JAVA_HOME=/graalvm-jdk-17.0.9+11.1\
+    && export PATH=/graalvm-jdk-17.0.9+11.1/bin:$PATH\
+    && wget https://downloads.apache.org/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz\
     && tar -zxvf apache-maven-3.9.5-bin.tar.gz\
     && bash -c "mv apache-maven-3.9.5 maven"\
     && export M2_HOME="$(pwd)/maven"\
@@ -13,16 +15,14 @@ RUN wget https://downloads.apache.org/maven/maven-3/3.9.5/binaries/apache-maven-
     && git clone --recursive https://github.com/powsybl/pypowsybl.git\
     && cd pypowsybl\
     && git fetch\
-    && git checkout move_connectable_prototype
-#     && pip3 install --upgrade pip setuptools\
-#     && pip3 install -r requirements.txt\
-#     && pip3 install .
+    && git checkout move_connectable_prototype\
+    && pip3 install --upgrade pip setuptools\
+    && pip3 install -r requirements.txt\
+    && pip3 install .
 
+COPY . ./package
 
-# RUN cd package\
-#     && pip3 install -r requirements.txt
-#
-# COPY . ./package
+RUN cd package\
+    && pip3 install -r requirements.txt
 
-# CMD cd pypowsybl/tests && ls -la && pip3 list && python3 -m pytest
-CMD cd SDKMAN_DIR && ls -la
+CMD cd package/src && python3 ScriptAirgo.py
