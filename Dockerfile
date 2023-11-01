@@ -25,4 +25,7 @@ COPY . ./package
 RUN cd package\
     && pip3 install -r requirements.txt
 
-CMD cd package/src && python3 ScriptAirgo.py
+ENV PATH "$(pwd)/package":$PATH
+ENV PYTHONPATH "$(pwd)/package"
+
+CMD export PYTHONPATH="$(pwd)/package" && cd package && python3 src/ScriptAirgo.py

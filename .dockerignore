@@ -1,10 +1,10 @@
 .idea/
 logs/
 
-Notebook/.ipynb_checkpoints
-Notebook/AgentSimulationNotebook.ipynb
+Notebook/*
 saved_agent_*
 
+**/*
 .git/
 **/*.svg
 **/*.html
@@ -17,3 +17,12 @@ scriptTestAntoineConv.py
 scriptTestPypowsybl.py
 src/data_test/grid.mat
 src/data_test/case14_realistic_test.mat
+README.md
+!src/data_test/l2rpn_case14_sandbox_Pypowsybl
+!src/ScriptAirgo.py
+!src/setup.py
+!src/Backend/network.py
+!src/Backend/powsybl_backend.py
+!src/__init__.py
+!src/Backend/__init__.py
+!requirements.txt

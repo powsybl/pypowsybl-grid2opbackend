@@ -15,11 +15,13 @@ from l2rpn_baselines.PPO_SB3 import evaluate as ppo_evaluate
 
 from src.Backend.powsybl_backend import PowsyblBackend
 
+import os
 
 
 def train_and_evaluate():
+    path = str(os.path.join(os.path.dirname(os.path.realpath(__file__)),os.path.join("data_test","l2rpn_case14_sandbox_Pypowsybl")))
     env = grid2op.make(
-        "data_test\l2rpn_case14_sandbox_Pypowsybl",
+        path,
         backend=PowsyblBackend(detailed_infos_for_cascading_failures=False),
     )
 
