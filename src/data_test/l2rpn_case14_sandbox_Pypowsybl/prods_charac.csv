@@ -1,0 +1,7 @@
+Pmax,Pmin,name,type,bus,max_ramp_up,max_ramp_down,min_up_time,min_down_time,marginal_cost,shut_down_cost,start_cost,x,y,V
+140,0.0,GEN-2,nuclear,1,5,5,96,96,40,10,20,180,10,142.1
+120,0.0,GEN-3,thermal,2,10,10,4,4,70,1,2,646,10,142.1
+70,0.0,GEN-6,wind,5,0,0,0,0,0,0,0,216,334,22.0
+70,0.0,GEN-6#0,solar,5,0,0,0,0,0,0,0,216,334,22.0
+40,0.0,GEN-8,solar,7,0,0,0,0,0,0,0,718,280,13.2
+100,0.0,GEN-1,hydro,0,15,15,4,4,70,1,2,0,199,142.1
