@@ -139,20 +139,40 @@ def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
             "23:00": 1.03
         }
     }
-    vals = list(coeffs["hour"].values())
-    x_final = np.arange(12 * len(vals))
 
+    months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    nb_weeks_per_month = 4
+    # year_val = np.empty(nb_weeks_per_month*len(days)*len(months))
+    year_val = []
+    for month in months:
+        for i in range(nb_weeks_per_month):
+            for day in days:
+                val = list(coeffs["hour"].values())
+                x_final = np.arange(12 * len(val))
+                val.append(val[0])
+                val = np.array(val) * coeffs["month"][month] * coeffs["day"][day]
+                x_interp = 12 * np.arange(len(val))
+                coeff_interp = interp1d(x=x_interp, y=val, kind="cubic")
+                day_val = coeff_interp(x_final)
+                # month_val = month_val + day_val
+                year_val.append(day_val)
+                # year_val[ind] = day_val
     # interpolate them at 5 minutes resolution (instead of 1h)
-    vals.append(vals[0])
-    vals = np.array(vals) * coeffs["month"]["oct"] * coeffs["day"]["mon"]
-    x_interp = 12 * np.arange(len(vals))
-    # start_date_time = datetime.date.fromisocalendar(coeffs.year,)
-    coeffs = interp1d(x=x_interp, y=vals, kind="cubic")
-    all_vals = coeffs(x_final)
+    # vals.append(vals[0])
+    # vals = np.array(vals) * coeffs["month"]["oct"] * coeffs["day"]["mon"]
+    # x_interp = 12 * np.arange(len(vals))
+    # # start_date_time = datetime.date.fromisocalendar(coeffs.year,)
+    # coeffs = interp1d(x=x_interp, y=vals, kind="cubic")
+    # all_vals = coeffs(x_final)
+
+    year_val = np.array(year_val)
 
     # compute the "smooth" loads matrix
-    load_p_smooth = all_vals.reshape(-1, 1) * load_p_init.reshape(1, -1)
-    load_q_smooth = all_vals.reshape(-1, 1) * load_q_init.reshape(1, -1)
+    load_p_smooth = year_val.reshape(-1, 1) * load_p_init.reshape(1, -1)
+    load_q_smooth = year_val.reshape(-1, 1) * load_q_init.reshape(1, -1)
+    # load_p_smooth = all_vals.reshape(-1, 1) * load_p_init.reshape(1, -1)
+    # load_q_smooth = all_vals.reshape(-1, 1) * load_q_init.reshape(1, -1)
 
     # add a bit of noise to it to get the "final" loads matrix
     load_p = load_p_smooth * np.random.lognormal(mean=0., sigma=0.003, size=load_p_smooth.shape)
@@ -205,11 +225,12 @@ def prods_charac_creator(back):
     """
     grid = back._grid
     columns = ['Pmax', 'Pmin', 'name', 'type', 'bus', 'max_ramp_up', 'max_ramp_down', 'min_up_time', 'min_down_time',
-             'marginal_cost', 'shut_down_cost', 'start_cost', 'x', 'y', 'V']
+               'marginal_cost', 'shut_down_cost', 'start_cost', 'x', 'y', 'V']
     df = pd.DataFrame(columns=columns)
     df['Pmax'] = grid.get_generators(all_attributes=True)['max_p']
     df['Pmin'] = grid.get_generators(all_attributes=True)['min_p']
     df[df['Pmin'] < 0] = 0
+    df[df['Pmax'] <= 0] = 10
     df['name'] = grid.get_generators(all_attributes=True).index.values
     df['type'] = 'thermal'
     df['bus'] = [back.map_sub[elem] for elem in grid.get_generators(all_attributes=True)['bus_breaker_bus_id'].values]
@@ -224,12 +245,12 @@ def prods_charac_creator(back):
     df.to_csv('prods_charac.csv', sep=',', index=False)
 
 def ramp_up(row):
-    if row['Pmax']<10:
+    if row['Pmax'] < 10:
         return row['Pmax']/2
     return 10
 
 def ramp_down(row):
-    if row['Pmin']<10:
+    if row['Pmin'] < 10:
         return row['Pmin']/2
     return 10
 
@@ -239,7 +260,6 @@ def get_env_name_displayed(env_name):
     res = re.sub("_large$", "", res)
     res = re.sub("\\.json$", "", res)
     return res
-
 
 
 if __name__ == "__main__":
@@ -270,17 +290,15 @@ if __name__ == "__main__":
         if FRAMEWORK == ppow:
             back = PowsyblBackend()
             back.load_grid(case_name)
-            pandapow_net = pp.from_json(case_name)
             # Handling thermal limits
+            back.runpf()
             with open(r'Thermal_limits.json', 'w') as fp:
-                thermal = 1000 * np.concatenate( # Multiplying by 1000 : kA -> A
-                    (
-                        pandapow_net.line["max_i_ka"].values,
-                        pandapow_net.trafo["sn_mva"].values / (np.sqrt(3) * pandapow_net.trafo["vn_hv_kv"].values)
-                    )
-                )
-                json.dump(list(thermal), fp)
-            
+                # TODO this is a temporary hack a better way to handle that will be proposed lately
+                thermal = 2 * back.get_line_flow()
+                thermal[thermal < 100] = 1000000
+                json.dump([x.item() for x in thermal], fp)
+
+            back.load_grid(case_name)
             back.runpf(is_dc=True)
             prods_charac_creator(back)
             coeff_l = 1.0
