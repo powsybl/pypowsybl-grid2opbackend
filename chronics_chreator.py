@@ -79,7 +79,7 @@ def make_grid2op_env(Backend, load_p, load_q, gen_p):
     return env
 
 
-def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
+def get_loads_gens(load_p_init, load_q_init, gen_p_init, week, sgen_p_init=None):
     # scale loads
 
     # use some French time series data for loads
@@ -142,37 +142,26 @@ def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
 
     months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
     days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    nb_weeks_per_month = 4
-    # year_val = np.empty(nb_weeks_per_month*len(days)*len(months))
-    year_val = []
-    for month in months:
-        for i in range(nb_weeks_per_month):
-            for day in days:
-                val = list(coeffs["hour"].values())
-                x_final = np.arange(12 * len(val))
-                val.append(val[0])
-                val = np.array(val) * coeffs["month"][month] * coeffs["day"][day]
-                x_interp = 12 * np.arange(len(val))
-                coeff_interp = interp1d(x=x_interp, y=val, kind="cubic")
-                day_val = coeff_interp(x_final)
-                # month_val = month_val + day_val
-                year_val.append(day_val)
-                # year_val[ind] = day_val
-    # interpolate them at 5 minutes resolution (instead of 1h)
-    # vals.append(vals[0])
-    # vals = np.array(vals) * coeffs["month"]["oct"] * coeffs["day"]["mon"]
-    # x_interp = 12 * np.arange(len(vals))
-    # # start_date_time = datetime.date.fromisocalendar(coeffs.year,)
-    # coeffs = interp1d(x=x_interp, y=vals, kind="cubic")
-    # all_vals = coeffs(x_final)
+    week_val = []
+    id_month = int(week/4)
+    month = months[id_month]
+    for day in days:
+        # interpolate them at 5 minutes resolution (instead of 1h)
+        val = list(coeffs["hour"].values())
+        x_final = np.arange(12 * len(val))
+        val.append(val[0])
+        val = np.array(val) * coeffs["month"][month] * coeffs["day"][day]
+        x_interp = 12 * np.arange(len(val))
+        coeff_interp = interp1d(x=x_interp, y=val, kind="cubic")
+        day_val = coeff_interp(x_final)
+        week_val.append(day_val)
 
-    year_val = np.array(year_val)
+    week_val = np.array(week_val)
 
     # compute the "smooth" loads matrix
-    load_p_smooth = year_val.reshape(-1, 1) * load_p_init.reshape(1, -1)
-    load_q_smooth = year_val.reshape(-1, 1) * load_q_init.reshape(1, -1)
-    # load_p_smooth = all_vals.reshape(-1, 1) * load_p_init.reshape(1, -1)
-    # load_q_smooth = all_vals.reshape(-1, 1) * load_q_init.reshape(1, -1)
+    load_p_smooth = week_val.reshape(-1, 1) * load_p_init.reshape(1, -1)
+    load_q_smooth = week_val.reshape(-1, 1) * load_q_init.reshape(1, -1)
+
 
     # add a bit of noise to it to get the "final" loads matrix
     load_p = load_p_smooth * np.random.lognormal(mean=0., sigma=0.003, size=load_p_smooth.shape)
@@ -186,7 +175,7 @@ def get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init=None):
         sgen_p = load_p.sum(axis=1).reshape(-1, 1) / load_p_init.sum() * sgen_p_init.reshape(1, -1)
         return load_p, load_q, gen_p, sgen_p
 
-def save_loads_gens(list_columns,list_chronics,save_names):
+def save_loads_gens(list_columns, list_chronics, save_names):
     """
     Function used to save as csv files the chronics created above with the other get_loads_gens function. The different
     lists should be ordered, so they can correspond adequately (list of loads name combined with list of chronics for load
@@ -261,6 +250,15 @@ def get_env_name_displayed(env_name):
     res = re.sub("\\.json$", "", res)
     return res
 
+def config_files(date_path, date_formatted):
+    time_interval = "00:05"
+    time_interval_text_file = open(os.path.join(date_path, "time_interval.info"), "w")
+    time_interval_text_file.write(time_interval)
+    time_interval_text_file.close()
+    start_date_time = str(date_formatted) + " 23:55"
+    start_datetime_info_text_file = open(os.path.join(date_path, "start_datetime.info"), "w")
+    start_datetime_info_text_file.write(start_date_time)
+    start_datetime_info_text_file.close()
 
 if __name__ == "__main__":
     np.random.seed(42)
@@ -287,46 +285,24 @@ if __name__ == "__main__":
             pp.to_json(case, case_name)
 
         # load the case file
-        if FRAMEWORK == ppow:
-            back = PowsyblBackend()
-            back.load_grid(case_name)
-            # Handling thermal limits
-            back.runpf()
-            with open(r'Thermal_limits.json', 'w') as fp:
-                # TODO this is a temporary hack a better way to handle that will be proposed lately
-                thermal = 2 * back.get_line_flow()
-                thermal[thermal < 100] = 1000000
-                json.dump([x.item() for x in thermal], fp)
+        back = PowsyblBackend()
+        back.load_grid(case_name)
+        # Handling thermal limits
+        back.runpf()
+        with open(r'Thermal_limits.json', 'w') as fp:
+            # TODO this is a temporary hack a better way to handle that will be proposed lately
+            thermal = 2 * back.get_line_flow()
+            thermal[thermal < 100] = 1000000
+            json.dump([x.item() for x in thermal], fp)
 
-            back.load_grid(case_name)
-            back.runpf(is_dc=True)
-            prods_charac_creator(back)
-            coeff_l = 1.0
-            # extract reference data
-            load_p_init = coeff_l * back._grid.get_loads()["p"].values.astype(dt_float)
-            load_q_init = coeff_l * back._grid.get_loads()["q"].values.astype(dt_float)
-            gen_p_init = coeff_l * back._grid.get_generators()["p"].values.astype(dt_float)
-
-        elif FRAMEWORK == pp:
-            case = FRAMEWORK.from_json(case_name)
-                        # Handling thermal limits
-            with open(r'Thermal_limits.json', 'w') as fp:
-                thermal = 1000 * np.concatenate( # Multiplying by 1000 : kA -> A
-                    (
-                        case.line["max_i_ka"].values,
-                        case.trafo["sn_mva"].values / (np.sqrt(3) * case.trafo["vn_hv_kv"].values)
-                    )
-                )
-                json.dump(list(thermal), fp)
-            back = PandaPowerBackend()
-            back.load_grid(case_name)
-            FRAMEWORK.runpp(case)  # for slack
-
-            # extract reference data
-            load_p_init = 1.0 * case.load["p_mw"].values
-            load_q_init = 1.0 * case.load["q_mvar"].values
-            gen_p_init = 1.0 * case.gen["p_mw"].values
-            sgen_p_init = 1.0 * case.sgen["p_mw"].values
+        back.load_grid(case_name)
+        back.runpf(is_dc=True)
+        prods_charac_creator(back)
+        coeff_l = 1.0
+        # extract reference data
+        load_p_init = coeff_l * back._grid.get_loads()["p"].values.astype(dt_float)
+        load_q_init = coeff_l * back._grid.get_loads()["q"].values.astype(dt_float)
+        gen_p_init = coeff_l * back._grid.get_generators()["p"].values.astype(dt_float)
 
             
         res_time = 1.
@@ -338,16 +314,19 @@ if __name__ == "__main__":
             res_unit = "ms"
 
         # simulate the data
-        if FRAMEWORK == ppow:
-            load_p, load_q, gen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init)
+
+        nb_of_week = 3  # choose that to be simple so every month has 4 weeks
+        for i in range(nb_of_week):
+            load_p, load_q, gen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init, i)
             columns_loads = back._grid.get_loads(all_attributes=True).index.values
             column_gens = back._grid.get_generators(all_attributes=True).index.values
-            save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], ['load_p.csv.bz2', 'load_q.csv.bz2', 'prod_p.csv.bz2'])
-
-        elif FRAMEWORK == pp:
-            load_p, load_q, gen_p, sgen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init, sgen_p_init)
-            columns_loads = case.load.index.values
-            column_gens = case.gen.index.values
-            save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], ['load_p.csv.bz2', 'load_q.csv.bz2', 'prod_p.csv.bz2'])
-        #save the data
+            date_formatted = datetime.datetime(2012, int(i/4)+1, 7*(i%4)+1)
+            date_formatted = datetime.date(date_formatted.year, date_formatted.month, date_formatted.day)
+            date = os.path.join("chronics", str(date_formatted)) # format year-nb_of_the_month-nb_of_the_week_in_the_month
+            os.mkdir(date)
+            load_p_name = os.path.join(date, 'load_p.csv.bz2')
+            load_q_name = os.path.join(date, 'load_q.csv.bz2')
+            prod_p_name = os.path.join(date, 'prod_p.csv.bz2')
+            save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], [load_p_name, load_q_name, prod_p_name])
+            config_files(date, date_formatted)
 
