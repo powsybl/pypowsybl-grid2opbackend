@@ -8,8 +8,11 @@
 # modified to be able to create chronics for pypowsybl backend and takes part of pypowsybl-grid2opbackend.
 
 import json
+import shutil
+import random
 import warnings
 import re
+import grid2op
 import pypowsybl as ppow
 import pandapower as pp
 import numpy as np
@@ -26,6 +29,9 @@ import os
 import datetime
 import pandas as pd
 from src.Backend.network import load as load_ppow_network
+from grid2op.Runner import Runner
+from grid2op.Agent import DoNothingAgent
+from grid2op.Parameters import Parameters
 
 FRAMEWORK = ppow
 
@@ -204,7 +210,7 @@ def save_loads_gens(list_columns, list_chronics, save_names):
         print("List does not have the same size, which implies that there are some chronics with unnamed objects")
 
 
-def prods_charac_creator(back):
+def prods_charac_creator(back,root_path):
     """
     Create and save the prods_charac.csv file use in chronics.
 
@@ -231,7 +237,7 @@ def prods_charac_creator(back):
     df['shut_down_cost'] = 1
     df['start_cost'] = 2
     df['V'] = grid.get_generators(all_attributes=True)['target_v']
-    df.to_csv('prods_charac.csv', sep=',', index=False)
+    df.to_csv(os.path.join(root_path, 'prods_charac.csv'), sep=',', index=False)
 
 def ramp_up(row):
     if row['Pmax'] < 10:
@@ -250,7 +256,49 @@ def get_env_name_displayed(env_name):
     res = re.sub("\\.json$", "", res)
     return res
 
-def config_files(date_path, date_formatted):
+
+def config_file(config_path, thermal_limit=None):
+    heading = """from grid2op.Action import PlayableAction
+from grid2op.Reward import RedispReward
+from grid2op.Rules import DefaultRules
+from grid2op.Chronics import Multifolder
+from grid2op.Chronics import GridStateFromFile, GridStateFromFileWithForecasts
+from src.Backend.powsybl_backend import PowsyblBackend
+    
+    """
+
+    if thermal_limit:
+        config = """
+config = {
+    "backend": PowsyblBackend,
+    "action_class": PlayableAction,
+    "observation_class": None,
+    "reward_class": None,  # RedispReward,
+    "gamerules_class": DefaultRules,
+    "chronics_class": Multifolder,
+    "grid_value_class": GridStateFromFile,
+    "voltagecontroler_class": None,
+    "thermal_limits": %s,
+    "names_chronics_to_grid": None,
+}"""%thermal_limit
+    else:
+        config = """
+config = {
+    "backend": PowsyblBackend,
+    "action_class": PlayableAction,
+    "observation_class": None,
+    "reward_class": None,  # RedispReward,
+    "gamerules_class": DefaultRules,
+    "chronics_class": Multifolder,
+    "grid_value_class": GridStateFromFile,
+    "voltagecontroler_class": None,
+    "names_chronics_to_grid": None,
+}"""
+    to_write = heading + config
+    with open((config_path), 'w') as fp:
+        fp.write(to_write)
+
+def info_files(date_path, date_formatted):
     time_interval = "00:05"
     time_interval_text_file = open(os.path.join(date_path, "time_interval.info"), "w")
     time_interval_text_file.write(time_interval)
@@ -284,27 +332,31 @@ if __name__ == "__main__":
             case = getattr(pn, os.path.splitext(case_name)[0])()
             pp.to_json(case, case_name)
 
+        root_path = case_name.split('.')[0]
+        if not os.path.exists(root_path):
+            os.makedirs(root_path)
+
+        grid_path = os.path.join(root_path, "grid.json")
+        shutil.copyfile(case_name, grid_path)
+
+        config_path = os.path.join(root_path, "config.py")
+        config_file(config_path)
+
+
+
         # load the case file
         back = PowsyblBackend()
-        back.load_grid(case_name)
-        # Handling thermal limits
-        back.runpf()
-        with open(r'Thermal_limits.json', 'w') as fp:
-            # TODO this is a temporary hack a better way to handle that will be proposed lately
-            thermal = 2 * back.get_line_flow()
-            thermal[thermal < 100] = 1000000
-            json.dump([x.item() for x in thermal], fp)
 
-        back.load_grid(case_name)
+        back.load_grid(grid_path)
         back.runpf(is_dc=True)
-        prods_charac_creator(back)
+        prods_charac_creator(back,root_path)
         coeff_l = 1.0
         # extract reference data
         load_p_init = coeff_l * back._grid.get_loads()["p"].values.astype(dt_float)
         load_q_init = coeff_l * back._grid.get_loads()["q"].values.astype(dt_float)
         gen_p_init = coeff_l * back._grid.get_generators()["p"].values.astype(dt_float)
 
-            
+
         res_time = 1.
         res_unit = "s"
         if len(load_p_init) <= 1000:
@@ -315,18 +367,49 @@ if __name__ == "__main__":
 
         # simulate the data
 
-        nb_of_week = 3  # choose that to be simple so every month has 4 weeks
+        nb_of_week = 2  # choose that to be simple so every month has 4 weeks
         for i in range(nb_of_week):
             load_p, load_q, gen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init, i)
             columns_loads = back._grid.get_loads(all_attributes=True).index.values
             column_gens = back._grid.get_generators(all_attributes=True).index.values
             date_formatted = datetime.datetime(2012, int(i/4)+1, 7*(i%4)+1)
             date_formatted = datetime.date(date_formatted.year, date_formatted.month, date_formatted.day)
-            date = os.path.join("chronics", str(date_formatted)) # format year-nb_of_the_month-nb_of_the_week_in_the_month
-            os.mkdir(date)
+            date = os.path.join(root_path, os.path.join("chronics", str(date_formatted))) # format year-nb_of_the_month-nb_of_the_week_in_the_month
+            if not os.path.exists(date):
+                os.makedirs(date)
             load_p_name = os.path.join(date, 'load_p.csv.bz2')
             load_q_name = os.path.join(date, 'load_q.csv.bz2')
             prod_p_name = os.path.join(date, 'prod_p.csv.bz2')
             save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], [load_p_name, load_q_name, prod_p_name])
-            config_files(date, date_formatted)
+            info_files(date, date_formatted)
+
+        th_limit_lines = [] # np.array([0] * back.n_line)
+
+        p = Parameters()
+        p.NO_OVERFLOW_DISCONNECTION = True
+        chronics = os.listdir(os.path.join(root_path, "chronics"))
+
+        env = grid2op.make(root_path,
+                           backend=PowsyblBackend(detailed_infos_for_cascading_failures=False),
+                           param=p)
+        runner = Runner(**env.get_params_for_runner(), agentClass=DoNothingAgent)
+        episode_data = runner.run(
+                        nb_episode=nb_of_week,
+                        add_detailed_output=True
+                    )
+
+        for elem in episode_data:
+            for obs in elem[5].observations:
+                flow = obs.a_or
+                th_limit_lines.append(flow)
+                # th_limit_lines = np.maximum(th_limit_lines, flow)
+        th_limit_lines = np.array(th_limit_lines)
+        selected_ind = random.choices(range(len(th_limit_lines[0])), k=int(len(th_limit_lines[0])*0.1))
+        final_th_limit = []
+        for i in range(len(th_limit_lines[0])):
+            if i in selected_ind:
+                final_th_limit.append(np.percentile(th_limit_lines.transpose()[i], q=99, method='closest_observation'))
+            else:
+                final_th_limit.append(1.5*np.max(th_limit_lines.transpose()[i]))
+        config_file(config_path, thermal_limit=[x.item() for x in final_th_limit])
 
