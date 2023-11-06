@@ -308,6 +308,40 @@ def info_files(date_path, date_formatted):
     start_datetime_info_text_file.write(start_date_time)
     start_datetime_info_text_file.close()
 
+
+
+def thermal_limit_selection(episode_data):
+    """
+    This function iterate on all the observations made for all the possible chronics and select for each line a value to
+    set for their thermal limit.
+    At the end we choose to keep the maximum observed flow value which we are multiplicating by 1.5 and for 10% of the
+    rest of the lines we set the thermal limit to the 99 percentile of all observed values.
+
+    Parameters
+    ----------
+    episode_data : EpisodeData
+        The full vector of information coming from a first iteration on all the chronics created
+
+    Returns
+    -------
+
+    """
+    th_limit_lines = []
+    for elem in episode_data:
+        for obs in elem[5].observations:
+            flow = obs.a_or
+            th_limit_lines.append(flow)
+
+    th_limit_lines = np.array(th_limit_lines)
+    selected_ind = random.choices(range(len(th_limit_lines[0])), k=int(len(th_limit_lines[0]) * 0.1))
+    final_th_limit = []
+    for i in range(len(th_limit_lines[0])):
+        if i in selected_ind:
+            final_th_limit.append(np.percentile(th_limit_lines.transpose()[i], q=99, method='closest_observation'))
+        else:
+            final_th_limit.append(1.5 * np.max(th_limit_lines.transpose()[i]))
+    config_file(config_path, thermal_limit=[x.item() for x in final_th_limit])
+
 if __name__ == "__main__":
     np.random.seed(42)
 
@@ -367,7 +401,7 @@ if __name__ == "__main__":
 
         # simulate the data
 
-        nb_of_week = 2  # choose that to be simple so every month has 4 weeks
+        nb_of_week = 2 # choose the number of weeks to create chronics for it is created to have a sequential creation from january to december with 4 weeks per month
         for i in range(nb_of_week):
             load_p, load_q, gen_p = get_loads_gens(load_p_init, load_q_init, gen_p_init, i)
             columns_loads = back._grid.get_loads(all_attributes=True).index.values
@@ -383,8 +417,6 @@ if __name__ == "__main__":
             save_loads_gens([columns_loads, columns_loads, column_gens], [load_p, load_q, gen_p], [load_p_name, load_q_name, prod_p_name])
             info_files(date, date_formatted)
 
-        th_limit_lines = [] # np.array([0] * back.n_line)
-
         p = Parameters()
         p.NO_OVERFLOW_DISCONNECTION = True
         chronics = os.listdir(os.path.join(root_path, "chronics"))
@@ -398,18 +430,5 @@ if __name__ == "__main__":
                         add_detailed_output=True
                     )
 
-        for elem in episode_data:
-            for obs in elem[5].observations:
-                flow = obs.a_or
-                th_limit_lines.append(flow)
-                # th_limit_lines = np.maximum(th_limit_lines, flow)
-        th_limit_lines = np.array(th_limit_lines)
-        selected_ind = random.choices(range(len(th_limit_lines[0])), k=int(len(th_limit_lines[0])*0.1))
-        final_th_limit = []
-        for i in range(len(th_limit_lines[0])):
-            if i in selected_ind:
-                final_th_limit.append(np.percentile(th_limit_lines.transpose()[i], q=99, method='closest_observation'))
-            else:
-                final_th_limit.append(1.5*np.max(th_limit_lines.transpose()[i]))
-        config_file(config_path, thermal_limit=[x.item() for x in final_th_limit])
+        thermal_limit_selection(episode_data)
 
