@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pypowsybl-grid2opbackend"
+name = "pypowsybl_grid2opbackend"
 version = "0.1.0"
 description = ""
 authors = [
