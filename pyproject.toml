@@ -8,15 +8,21 @@ authors = [
     "Vincent Renault <vincent.renault@artelys.com>"
 ]
 readme = "README.md"
-packages = [{include = "pypowsybl_grid2opbackend"}]
+packages = [{include = "src"}]
+
+[[tool.poetry.source]]
+name = "pypi-public"
+url = "https://pypi.org/simple/"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.9"
 grid2op = "^1.9.5"
 pypowsybl = "^0.23.0.dev1" # Local installation following grid2op maybe this should be removd from .toml and install by pip
 pandapower = "^2.13.1"
 l2rpn-baselines = "^0.8.0"
 stable-baselines3 = "^2.1.0"
+urllib3 = "^1.26.0"
+
 
 [build-system]
 requires = ["poetry-core"]
