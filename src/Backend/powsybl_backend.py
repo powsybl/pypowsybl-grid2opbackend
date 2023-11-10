@@ -1198,7 +1198,7 @@ class PowsyblBackend(Backend):
                 lines[lines["r"] == 0][colname].values,
             )
         )
-        # res = np.nan_to_num(res)
+
         return res
 
     def _return_real_lines_transfo(self):
