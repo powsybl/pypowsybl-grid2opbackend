@@ -63,6 +63,26 @@ In the script [ScriptForSimpleUseCase.py](src/ScriptForSimpleUseCase.py) you can
 one action using our backend on the ieee14 case network. Some several actions could be taken up for you to 
 comment/decomment to act as you like on the network.
 
+## AirGo project dataset generation
+The dataset created for the needs of the project can be found [here](https://www.ai4europe.eu/research/ai-catalog/airgo-i-nergy-open-dataset).
+
+### Processes of creation
+This dataset was created using [chronics_creator.py](chronics_chreator.py). We generated data for january for exactly 4 
+weeks of 7 days with a 5 minutes step resolution. The given dates do not correspond to any real date. Every month starting 
+with a monday.
+
+For some simplification purpose each week of a given month have exactly the same probabilistic distribution, what differentiates  
+them is only the randomisation seed chose.
+
+### Potential use for machine learning
+In a classical machine learning training example we could decide for example to choose 3 weeks for training and 1 week for 
+evaluation purposes. Nevertheless, it is also possible to separate more precisely data based on time step for example, but 
+it will be more complicated.
+
+### How to create some more synthetic data
+If the available data are not enough we can create some more by changing the *nb_of_week* parameter in the main of the file.
+The data will be created starting from the month of january until december, 4 weeks per month each.
+
 ## Definition and comparison of objects between Pypowsybl and Grid2op
 
 ### Lines and transformers
