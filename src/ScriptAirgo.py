@@ -9,7 +9,7 @@
 import os.path
 
 import grid2op
-
+from grid2op.Reward import L2RPNReward # Or any other reward
 from l2rpn_baselines.PPO_SB3 import train as ppo_train
 from l2rpn_baselines.PPO_SB3 import evaluate as ppo_evaluate
 
@@ -42,11 +42,15 @@ def train_and_evaluate():
         raise FileExistsError("One dataset has been created but not the other one, erase the entire dataset folder and "
                               "start anew")
 
-    train = grid2op.make(train_path, backend=PowsyblBackend(detailed_infos_for_cascading_failures=False))
+    train = grid2op.make(train_path,
+                         backend=PowsyblBackend(detailed_infos_for_cascading_failures=False),
+                         reward_class=L2RPNReward)
 
     agent = ppo_train(train, name="PPO_SB3", save_path="baseline", iterations=10000)
 
-    val = grid2op.make(eval_path, backend=PowsyblBackend(detailed_infos_for_cascading_failures=False))
+    val = grid2op.make(eval_path,
+                       backend=PowsyblBackend(detailed_infos_for_cascading_failures=False),
+                       reward_class=L2RPNReward) # One's could decide to change the reward for evaluation
 
     g2op_agent, res_val = ppo_evaluate(
         val,
