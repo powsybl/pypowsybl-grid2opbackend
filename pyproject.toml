@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pypowsybl_grid2opbackend"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
 authors = [
     "Rémi Tschupp <remi.tschupp@artelyes.com>",
@@ -8,7 +8,7 @@ authors = [
     "Vincent Renault <vincent.renault@artelys.com>"
 ]
 readme = "README.md"
-packages = [{include = "src"}]
+packages = [{include = "pypowsybl_grid2opbackend"}]
 
 [[tool.poetry.source]]
 name = "pypi-public"
