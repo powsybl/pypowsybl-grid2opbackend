@@ -59,7 +59,7 @@ I copy/paste here a version of those requirements (from 10/10/2023).
 >```
 >
 ## Simple example of use
-In the script [ScriptForSimpleUseCase.py](src/ScriptForSimpleUseCase.py) you can find an example of simple agent doing 
+In the script [ScriptForSimpleUseCase.py](pypowsybl_grid2opbackend/ScriptForSimpleUseCase.py) you can find an example of simple agent doing 
 one action using our backend on the ieee14 case network. Some several actions could be taken up for you to 
 comment/decomment to act as you like on the network.
 

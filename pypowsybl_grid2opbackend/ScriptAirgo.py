@@ -14,7 +14,7 @@ from l2rpn_baselines.PPO_SB3 import train as ppo_train
 from l2rpn_baselines.PPO_SB3 import evaluate as ppo_evaluate
 
 
-from src.Backend.powsybl_backend import PowsyblBackend
+from pypowsybl_grid2opbackend.Backend.powsybl_backend import PowsyblBackend
 
 DATA_PATH = "data_test\l2rpn_case14_sandbox_Pypowsybl"
 

@@ -18,17 +18,17 @@ import pandapower as pp
 import numpy as np
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-from src.Backend.powsybl_backend import PowsyblBackend
-from grid2op.Backend import PandaPowerBackend
+from pypowsybl_grid2opbackend.Backend.powsybl_backend import PowsyblBackend
+#from grid2op.Backend import PandaPowerBackend
 from grid2op import make, Parameters
-from grid2op.dtypes import dt_int, dt_float, dt_bool
+from grid2op.dtypes import dt_float
 from grid2op.Chronics import FromNPY
-from lightsim2grid import LightSimBackend, TimeSerie, SecurityAnalysis
+#from lightsim2grid import LightSimBackend, TimeSerie, SecurityAnalysis
 from tqdm import tqdm
 import os
 import datetime
 import pandas as pd
-from src.Backend.network import load as load_ppow_network
+#from pypowsybl_grid2opbackend.Backend.network import load as load_ppow_network
 from grid2op.Runner import Runner
 from grid2op.Agent import DoNothingAgent
 from grid2op.Parameters import Parameters

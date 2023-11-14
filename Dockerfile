@@ -25,4 +25,4 @@ COPY . ./package
 RUN cd package\
     && pip3 install -r requirements.txt
 
-CMD cd package/src && python3 ScriptAirgo.py
+CMD cd package/pypowsybl_grid2opbackend && python3 ScriptAirgo.py

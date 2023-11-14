@@ -83,7 +83,7 @@ jobs:
 #        run: pip3 install wheelhouse/*.whl --user
 
       - name: Run tests
-        working-directory: ./src/tests # Run in subdir to use installed lib, not sources
+        working-directory: ./pypowsybl_grid2opbackend/tests # Run in subdir to use installed lib, not sources
         run: |
           pytest
 

@@ -22,7 +22,7 @@ from grid2op.Exceptions import *
 from grid2op.Action._BackendAction import _BackendAction
 from grid2op.Action import ActionSpace
 from grid2op.Rules import RulesChecker
-from src.Backend.network import load as load_ppow_network
+from pypowsybl_grid2opbackend.Backend.network import load as load_ppow_network
 
 BUS_EXTENSION = '_dummy'
 
@@ -97,7 +97,7 @@ class PowsyblBackend(Backend):
     .. code-block:: python
 
             import grid2op
-            from src.Backend.powsybl_backend import PowsyblBackend
+            from pypowsybl_grid2opbackend.Backend.powsybl_backend import PowsyblBackend
             backend = PowsyblBackend()
 
             env = grid2op.make(backend=backend)
