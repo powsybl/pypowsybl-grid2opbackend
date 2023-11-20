@@ -1,5 +1,8 @@
 # pypowsybl-grid2opbackend integration (AIRGo project)
 
+### Attribution
+*This Jupyter Notebook is part of a project that has received funding from the European Union’s Horizon 2020 research and innovation programme under grant agreement No 101016508.*
+
 ![AIRGoLogo](logos/i-nergy_logo.png)
 
 ## Prerequisite
