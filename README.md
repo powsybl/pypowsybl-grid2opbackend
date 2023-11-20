@@ -1,5 +1,7 @@
 # pypowsybl-grid2opbackend integration (AIRGo project)
 
+![AIRGoLogo](logos/i-nergy_logo.png)
+
 ## Prerequisite
 To be able to work properly with this backend integration you will have to install a specific version of pypowsybl.
 You can find it there : [specific pypowsybl branch](https://github.com/powsybl/pypowsybl/tree/move_connectable_prototype).
