@@ -374,7 +374,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
             p_or_orig, p_or
         ), "the copied object affects its original 'parent'"
         assert (
-            np.isnan(p_or_ref[l_id])
+            np.abs(p_or_ref[l_id]) <= self.tol_one
         ), "powerline {} has not been disconnected".format(l_id)
 
     def test_copy2(self):
@@ -439,7 +439,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
             [-16.960958,
              6.5786576,
              2.1715472,
-             "nan",
+             0.0,
              0.10771065,
              4.060638,
              23.061537,
@@ -458,8 +458,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
              -5.3284087]
         )
         p_or_orig, q_or_orig, *_ = self.backend.lines_or_info()
-        q_or_orig = np.where(np.isnan(q_or_orig ), 'nan', q_or_orig)
-        assert (q_or_orig == true_values_ac).all()# self.compare_vect(q_or_orig, true_values_ac)
+        assert self.compare_vect(q_or_orig, true_values_ac)
 
     def test_pf_ac_dc(self):
         self.skip_if_needed()
@@ -488,7 +487,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         conv = self.backend.runpf(is_dc=True)
         assert conv
         p_or_orig, q_or_orig, *_ = self.backend.lines_or_info()
-        assert np.all(np.isnan(q_or_orig)), "in dc mode all q must be nan, equivalent to zero"
+        assert np.all(q_or_orig == 0.0), "in dc mode all q must be 0"
         conv = self.backend.runpf(is_dc=False)
         assert conv
         p_or_orig, q_or_orig, *_ = self.backend.lines_or_info()
@@ -1311,7 +1310,7 @@ class BaseTestTopoAction(MakeBackend):
         self.backend.apply_action(bk_act2)
         self.backend.runpf()
         p_or2, *_ = self.backend.lines_or_info()
-        assert np.isnan(p_or2[l_id]), "line has not been disconnected"
+        assert np.abs(p_or2[l_id]) <= self.tol_one, "line has not been disconnected"
         assert np.any(np.abs(p_or2 - p_or) >= self.tol_one)
         # check i can put it back to orig state
         try:
@@ -1443,7 +1442,7 @@ class BaseTestTopoAction(MakeBackend):
         self.backend.apply_action(bk_act2)
         self.backend.runpf()
         p_or2, *_ = self.backend.lines_or_info()
-        assert np.isnan(p_or2[l_id]), "line has not been disconnected"
+        assert np.abs(p_or2[l_id]) <= self.tol_one, "line has not been disconnected"
         assert np.any(np.abs(p_or2 - p_or) >= self.tol_one)
         # check i can put it back to orig state
         try:
