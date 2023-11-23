@@ -1,5 +1,5 @@
 # actual dependencies
-grid2op == 1.9.5
+grid2op == 1.9.6
 pandapower == 2.13.1
 networkx
 matplotlib

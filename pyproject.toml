@@ -16,7 +16,7 @@ url = "https://pypi.org/simple/"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-grid2op = "^1.9.5"
+grid2op = "^1.9.6"
 pypowsybl = "^0.23.0.dev1" # Local installation following grid2op maybe this should be removd from .toml and install by pip
 pandapower = "^2.13.1"
 l2rpn-baselines = "^0.8.0"
