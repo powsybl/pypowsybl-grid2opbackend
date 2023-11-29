@@ -473,7 +473,7 @@ class PowsyblBackend(Backend):
             self._grid.get_shunt_compensators()['bus_id'].values].values.astype(
             dt_float
         )
-        self.shunts_data_available = True
+        self.shunts_data_available = False
 
         # store the topoid -> objid
         self._big_topo_to_obj = [(None, None) for _ in range(self.dim_topo)]
@@ -916,6 +916,12 @@ class PowsyblBackend(Backend):
                     self.load_v[:],
                     self.load_theta[:],
                 ) = self._loads_info()
+
+                if is_dc:
+                    if True in np.isnan(self.prod_p):
+                        raise DivergingPowerFlow("Isolated gen")
+                    if True in np.isnan(self.load_p):
+                        raise DivergingPowerFlow("Isolated load")
 
                 if not is_dc:
                     if not np.all(np.isfinite(self.prod_v)):
