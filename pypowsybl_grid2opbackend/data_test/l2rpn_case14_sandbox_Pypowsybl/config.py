@@ -3,7 +3,7 @@ from grid2op.Reward import RedispReward
 from grid2op.Rules import DefaultRules
 from grid2op.Chronics import Multifolder
 from grid2op.Chronics import GridStateFromFileWithForecasts
-from src.Backend.powsybl_backend import PowsyblBackend
+from pypowsybl_grid2opbackend.Backend.powsybl_backend import PowsyblBackend
 
 config = {
     "backend": PowsyblBackend,

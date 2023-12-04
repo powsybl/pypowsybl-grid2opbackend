@@ -17,6 +17,7 @@ import scipy
 import math
 import copy
 import itertools
+from grid2op.Exceptions import DivergingPowerFlow
 from grid2op.dtypes import dt_int, dt_float, dt_bool
 from grid2op.Backend.backend import Backend
 from grid2op.Exceptions import *
