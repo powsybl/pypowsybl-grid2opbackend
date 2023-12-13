@@ -1,19 +1,15 @@
 # actual dependencies
-grid2op == 1.9.7
-pandapower == 2.13.1
-networkx
-matplotlib
-l2rpn-baselines == 0.8.0
-stable-baselines3 == 2.1.0
+grid2op >= 1.9.7
+pandapower >= 2.13.1
 
 # documentation dependencies
 sphinx==4.2.0
 pydata-sphinx-theme==0.6.3
 
 # CI dependencies
-wheel==0.38.1
-coverage==5.5
+wheel>=0.38.1
+coverage>=5.5
 pytest>=6.2.5
-mypy==0.982
-pandas-stubs==1.2.0.47
-pylint==2.17.2
+mypy>=0.982
+pandas-stubs>=1.2.0.47
+pylint>=2.17.2
