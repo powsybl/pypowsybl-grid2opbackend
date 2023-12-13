@@ -11,7 +11,6 @@ import unittest
 import os
 from pathlib import Path
 from pypowsybl_grid2opbackend.Backend.powsybl_backend import PowsyblBackend
-from pypowsybl_grid2opbackend.tests.helper_path_test import HelperTests
 from pypowsybl_grid2opbackend.tests.base_backend_test_powsybl import BaseTestLoadingCase
 from pypowsybl_grid2opbackend.tests.base_backend_test_powsybl import BaseTestLoadingBackendFunc
 from pypowsybl_grid2opbackend.tests.base_backend_test_powsybl import BaseTestTopoAction
@@ -33,7 +32,7 @@ data_dir = os.path.abspath(os.path.join(implementation_dir, os.path.join("data_t
 PATH_DATA_TEST_PYPOW = data_dir
 
 
-class TestLoadingCase(HelperTests, BaseTestLoadingCase):
+class TestLoadingCase(BaseTestLoadingCase, unittest.TestCase):
     def make_backend(self, detailed_infos_for_cascading_failures=False):
         return PowsyblBackend(
             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
@@ -46,7 +45,7 @@ class TestLoadingCase(HelperTests, BaseTestLoadingCase):
         return "grid.json"
 
 
-class TestLoadingBackendFunc(HelperTests, BaseTestLoadingBackendFunc):
+class TestLoadingBackendFunc(BaseTestLoadingBackendFunc, unittest.TestCase):
     def setUp(self):
         # TODO find something more elegant
         BaseTestLoadingBackendFunc.setUp(self)
@@ -67,7 +66,7 @@ class TestLoadingBackendFunc(HelperTests, BaseTestLoadingBackendFunc):
         return "grid.json"
 
 
-class TestTopoAction(HelperTests, BaseTestTopoAction):
+class TestTopoAction(BaseTestTopoAction, unittest.TestCase):
     def setUp(self):
         BaseTestTopoAction.setUp(self)
 
@@ -88,7 +87,7 @@ class TestTopoAction(HelperTests, BaseTestTopoAction):
 
 
 class TestEnvPerformsCorrectCascadingFailures(
-    HelperTests, BaseTestEnvPerformsCorrectCascadingFailures
+    BaseTestEnvPerformsCorrectCascadingFailures, unittest.TestCase
 ):
     def setUp(self):
         BaseTestEnvPerformsCorrectCascadingFailures.setUp(self)
@@ -109,7 +108,7 @@ class TestEnvPerformsCorrectCascadingFailures(
         return PATH_DATA_TEST_PYPOW
 
 
-class TestChangeBusAffectRightBus(HelperTests, BaseTestChangeBusAffectRightBus):
+class TestChangeBusAffectRightBus(BaseTestChangeBusAffectRightBus, unittest.TestCase):
 
     def setUp(self):
         BaseTestChangeBusAffectRightBus.setUp(self)
@@ -125,7 +124,7 @@ class TestChangeBusAffectRightBus(HelperTests, BaseTestChangeBusAffectRightBus):
         return PATH_DATA_TEST_PYPOW
 
 # TODO work on shunt tests
-# class TestShuntAction(HelperTests, BaseTestShuntAction):
+# class TestShuntAction(BaseTestShuntAction, unittest.TestCase):
 #
 #     def setUp(self):
 #         BaseTestShuntAction.setUp(self)
@@ -141,7 +140,7 @@ class TestChangeBusAffectRightBus(HelperTests, BaseTestChangeBusAffectRightBus):
 #     def get_path(self):
 #         return PATH_DATA_TEST_PYPOW
 
-class TestResetEqualsLoadGrid(HelperTests, BaseTestResetEqualsLoadGrid):
+class TestResetEqualsLoadGrid(BaseTestResetEqualsLoadGrid, unittest.TestCase):
     def setUp(self):
         BaseTestResetEqualsLoadGrid.setUp(self)
 
@@ -158,7 +157,7 @@ class TestResetEqualsLoadGrid(HelperTests, BaseTestResetEqualsLoadGrid):
 
 
 
-class TestVoltageOWhenDisco(HelperTests, BaseTestVoltageOWhenDisco):
+class TestVoltageOWhenDisco(BaseTestVoltageOWhenDisco, unittest.TestCase):
 
     def setUp(self):
         BaseTestVoltageOWhenDisco.setUp(self)
@@ -174,7 +173,7 @@ class TestVoltageOWhenDisco(HelperTests, BaseTestVoltageOWhenDisco):
         return PATH_DATA_TEST_PYPOW
 
 
-class TestChangeBusSlack(HelperTests, BaseTestChangeBusSlack):
+class TestChangeBusSlack(BaseTestChangeBusSlack, unittest.TestCase):
     def setUp(self):
         BaseTestChangeBusSlack.setUp(self)
     def make_backend(self, detailed_infos_for_cascading_failures=False):
@@ -189,14 +188,14 @@ class TestChangeBusSlack(HelperTests, BaseTestChangeBusSlack):
         return PATH_DATA_TEST_PYPOW
 
 
-# class TestIssuesTest(HelperTests, BaseIssuesTest):
+# class TestIssuesTest(BaseIssuesTest):
 #     def make_backend(self, detailed_infos_for_cascading_failures=False):
 #         return PowsyblBackend(
 #             detailed_infos_for_cascading_failures=detailed_infos_for_cascading_failures
 #         )
 
 
-class TestStatusAction(HelperTests, BaseStatusActions):
+class TestStatusAction(BaseStatusActions, unittest.TestCase):
 
     def setUp(self):
         BaseStatusActions.setUp(self)

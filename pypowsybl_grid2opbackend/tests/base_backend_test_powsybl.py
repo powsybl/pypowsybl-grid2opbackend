@@ -46,28 +46,28 @@ from grid2op.Rules import RulesChecker
 from grid2op.MakeEnv import make
 from grid2op.Rules import AlwaysLegal
 from grid2op.Action._BackendAction import _BackendAction
+from grid2op.tests.helper_path_test import MakeBackend
 
-
-class MakeBackend(ABC):
-    @abstractmethod
-    def make_backend(self, detailed_infos_for_cascading_failures=False):
-        pass
-
-    def get_path(self):
-        raise NotImplementedError(
-            "This function should be implemented for the test suit you are developping"
-        )
-
-    def get_casefile(self):
-        raise NotImplementedError(
-            "This function should be implemented for the test suit you are developping"
-        )
-
-    def skip_if_needed(self):
-        if hasattr(self, "tests_skipped"):
-            nm_ = inspect.currentframe().f_back.f_code.co_name
-            if nm_ in self.tests_skipped:
-                self.skipTest('the test "{}" is skipped'.format(nm_))
+# class MakeBackend(ABC):
+#     @abstractmethod
+#     def make_backend(self, detailed_infos_for_cascading_failures=False):
+#         pass
+#
+#     def get_path(self):
+#         raise NotImplementedError(
+#             "This function should be implemented for the test suit you are developping"
+#         )
+#
+#     def get_casefile(self):
+#         raise NotImplementedError(
+#             "This function should be implemented for the test suit you are developping"
+#         )
+#
+#     def skip_if_needed(self):
+#         if hasattr(self, "tests_skipped"):
+#             nm_ = inspect.currentframe().f_back.f_code.co_name
+#             if nm_ in self.tests_skipped:
+#                 self.skipTest('the test "{}" is skipped'.format(nm_))
 
 
 class BaseTestNames(MakeBackend):
@@ -200,6 +200,7 @@ class BaseTestLoadingBackendFunc(MakeBackend):
         self.bkact_class = _BackendAction.init_grid(self.backend)
         self.backend.runpf()
         self.backend.assert_grid_correct_after_powerflow()
+        super().setUp()
 
     def tearDown(self):
         pass
@@ -782,6 +783,8 @@ class BaseTestTopoAction(MakeBackend):
             gridobj=self.backend, legal_action=self.game_rules.legal_action
         )
         self.bkact_class = _BackendAction.init_grid(self.backend)
+        super().setUp()
+        self.tol_one = dt_float(1e-3)
 
     def tearDown(self):
         pass
@@ -1539,6 +1542,7 @@ class BaseTestEnvPerformsCorrectCascadingFailures(MakeBackend):
         self.chronics_handler = ChronicsHandler()
         self.id_first_line_disco = 8  # due to hard overflow
         self.id_2nd_line_disco = 11  # due to soft overflow
+        super().setUp()
 
     def tearDown(self):
         pass
@@ -1832,7 +1836,7 @@ class BaseTestChangeBusAffectRightBus(MakeBackend):
         )
         self.chronics_handler = ChronicsHandler()
         self.env_params = Parameters()
-
+        super().setUp()
 
     def test_set_bus(self):
 
@@ -2040,6 +2044,8 @@ class BaseTestShuntAction(MakeBackend):
 
         self.chronics_handler = ChronicsHandler()
         self.env_params = Parameters()
+        super().setUp()
+
     def test_shunt_ambiguous_id_incorrect(self):
         self.skip_if_needed()
         backend = self.make_backend()
@@ -2173,6 +2179,7 @@ class BaseTestResetEqualsLoadGrid(MakeBackend):
             )
             self.backend2 = self.env2.backend
         np.random.seed(69)
+        super().setUp()
 
     def tearDown(self):
         self.env1.close()
@@ -2384,6 +2391,7 @@ class BaseTestVoltageOWhenDisco(MakeBackend):
         self.backend.assert_grid_correct_after_powerflow()
         self.chronics_handler = ChronicsHandler()
         self.env_params = Parameters()
+        super().setUp()
 
     def test_this(self):
         self.skip_if_needed()
@@ -2429,6 +2437,7 @@ class BaseTestChangeBusSlack(MakeBackend):
         self.backend.assert_grid_correct_after_powerflow()
         self.chronics_handler = ChronicsHandler()
         self.env_params = Parameters()
+        super().setUp()
 
 
     def test_change_slack_case14(self):
@@ -3013,7 +3022,7 @@ class BaseStatusActions(MakeBackend):
         self.backend.assert_grid_correct_after_powerflow()
         self.chronics_handler = ChronicsHandler()
         self.env_params = Parameters()
-
+        super().setUp()
 
     def _make_my_env(self):
         backend = self.make_backend()
