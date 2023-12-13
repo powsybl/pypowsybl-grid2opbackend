@@ -144,3 +144,9 @@ This is done by calling the _double_buses function in the PowsyblBackend.py file
 This allows the user to move any object from one bus to another in the backend. This function could only use bus_breaker_view
 buses id to work (different from bus_view buses id in pypowsybl). This is particularly useful for Grid2op topological 
 changes to switch any object from a bus to another inside a substation (only possible topological action in Grid2op)
+
+## License information
+Copyright 2023 Artelys: http://www.artelys.com
+
+This Source Code is subject to the terms of the Mozilla Public License (MPL) v2 also available
+[here](https://www.mozilla.org/en-US/MPL/2.0/) or [in the repository](LICENSE).
