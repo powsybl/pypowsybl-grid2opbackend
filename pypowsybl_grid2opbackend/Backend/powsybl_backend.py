@@ -919,19 +919,17 @@ class PowsyblBackend(Backend):
                 ) = self._loads_info()
 
                 if is_dc:
-                    if True in np.isnan(self.prod_p):
+                    if np.isnan(self.prod_p).any():
                         raise DivergingPowerFlow("Isolated gen")
-                    if True in np.isnan(self.load_p):
+                    if np.isnan(self.load_p).any():
                         raise DivergingPowerFlow("Isolated load")
 
                 if not is_dc:
                     if not np.all(np.isfinite(self.prod_v)):
-                        # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
                         raise DivergingPowerFlow("Isolated gen")
 
                 if not is_dc:
                     if not np.all(np.isfinite(self.load_v)):
-                        # TODO see if there is a better way here
                         # some loads are disconnected: it's a game over case!
                         raise DivergingPowerFlow("Isolated load")
 
