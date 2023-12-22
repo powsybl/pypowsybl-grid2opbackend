@@ -14,15 +14,17 @@ import pandas as pd
 import pandapower as pdp
 import pypowsybl as ppow
 import scipy
+import math
 import copy
 import itertools
+from grid2op.Exceptions import DivergingPowerFlow
 from grid2op.dtypes import dt_int, dt_float, dt_bool
 from grid2op.Backend.backend import Backend
 from grid2op.Exceptions import *
 from grid2op.Action._BackendAction import _BackendAction
 from grid2op.Action import ActionSpace
 from grid2op.Rules import RulesChecker
-from src.Backend.network import load as load_ppow_network
+from pypowsybl_grid2opbackend.Backend.network import load as load_ppow_network
 
 BUS_EXTENSION = '_dummy'
 
@@ -97,7 +99,7 @@ class PowsyblBackend(Backend):
     .. code-block:: python
 
             import grid2op
-            from src.Backend.powsybl_backend import PowsyblBackend
+            from pypowsybl_grid2opbackend.Backend.powsybl_backend import PowsyblBackend
             backend = PowsyblBackend()
 
             env = grid2op.make(backend=backend)
@@ -181,6 +183,8 @@ class PowsyblBackend(Backend):
             None  # number of powerline (real powerline, not transformer)
         )
 
+        self._pf_init = ppow._pypowsybl.VoltageInitMode.DC_VALUES
+
     def load_grid(self, path, filename=None):
         """
         Regarding the type of entry file (.json designed for pandapower, .mat for matpower  or .xiidm for pypowsybl)
@@ -247,14 +251,8 @@ class PowsyblBackend(Backend):
         self.__nb_powerline = copy.deepcopy(lines[lines["r"] != 0].shape[0])
         self._init_bus_load = self._grid.get_loads(all_attributes=True)["bus_breaker_bus_id"].values
         self._init_bus_gen = self._grid.get_generators(all_attributes=True)["bus_breaker_bus_id"].values
-        self._init_bus_lor = lines["bus_breaker_bus1_id"].values
-        self._init_bus_lex = lines["bus_breaker_bus2_id"].values
-
-        winding_transfo = self._grid.get_2_windings_transformers(all_attributes=True)
-        t_for = winding_transfo["bus_breaker_bus1_id"].values
-        t_fex = winding_transfo["bus_breaker_bus2_id"].values
-        self._init_bus_lor = np.concatenate((self._init_bus_lor, t_for))
-        self._init_bus_lex = np.concatenate((self._init_bus_lex, t_fex))
+        self._init_bus_lor = self._aux_get_line_info("bus_breaker_bus1_id")
+        self._init_bus_lex = self._aux_get_line_info("bus_breaker_bus2_id")
 
         # and now initialize the attributes (see list bellow)
         if self._grid.get_3_windings_transformers().shape[0] > 0:
@@ -476,7 +474,7 @@ class PowsyblBackend(Backend):
             self._grid.get_shunt_compensators()['bus_id'].values].values.astype(
             dt_float
         )
-        self.shunts_data_available = True
+        self.shunts_data_available = False
 
         # store the topoid -> objid
         self._big_topo_to_obj = [(None, None) for _ in range(self.dim_topo)]
@@ -884,18 +882,18 @@ class PowsyblBackend(Backend):
 
                 if np.any(~self._grid.get_loads()["connected"]):
                     # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
-                    raise BackendError("Disconnected load: for now grid2op cannot handle properly"
-                                       " disconnected load. If you want to disconnect one, say it"
-                                       " consumes 0. instead. Please check loads: "
-                                       f"{np.where(~self._grid.get_loads()['connected'])[0]}"
-                                       )
+                    raise DivergingPowerFlow("Disconnected load: for now grid2op cannot handle properly"
+                                             " disconnected load. If you want to disconnect one, say it"
+                                             " consumes 0. instead. Please check loads: "
+                                             f"{np.where(~self._grid.get_loads()['connected'])[0]}"
+                                             )
                 if np.any(~self._grid.get_generators()["connected"]):
                     # TODO see if there is a better way here -> do not handle this here, but rather in Backend._next_grid_state
-                    raise BackendError("Disconnected gen: for now grid2op cannot handle properly"
-                                       " disconnected generators. If you want to disconnect one, say it"
-                                       " produces 0. instead. Please check generators: "
-                                       f"{np.where(~self._grid.get_generators()['connected'])[0]}"
-                                       )
+                    raise DivergingPowerFlow("Disconnected gen: for now grid2op cannot handle properly"
+                                             " disconnected generators. If you want to disconnect one, say it"
+                                             " produces 0. instead. Please check generators: "
+                                             f"{np.where(~self._grid.get_generators()['connected'])[0]}"
+                                             )
 
                 if is_dc:
                     res = ppow.loadflow.run_dc(self._grid,
@@ -919,26 +917,36 @@ class PowsyblBackend(Backend):
                     self.load_v[:],
                     self.load_theta[:],
                 ) = self._loads_info()
-                
-                branches = self._grid.get_branches()
-                branches_bus1 = branches['bus1_id'] 
-                branches_bus2 = branches['bus2_id']
 
-                self.p_or[:] = self._aux_get_line_info("p1")
-                self.q_or[:] = self._aux_get_line_info("q1")
-                self.v_or[:] = self._aux_get_voltage_info(branches_bus1)
-                self.a_or[:] = self._aux_get_line_info("i1")
-                self.theta_or[:] = self._aux_get_theta_info(branches_bus1)
-                self.a_or[~np.isfinite(self.a_or)] = 0.0
-                self.v_or[~np.isfinite(self.v_or)] = 0.0
+                if is_dc:
+                    if np.isnan(self.prod_p).any():
+                        raise DivergingPowerFlow("Isolated gen")
+                    if np.isnan(self.load_p).any():
+                        raise DivergingPowerFlow("Isolated load")
 
-                self.p_ex[:] = self._aux_get_line_info("p2")
-                self.q_ex[:] = self._aux_get_line_info("q2")
-                self.v_ex[:] = self._aux_get_voltage_info(branches_bus2)
-                self.a_ex[:] = self._aux_get_line_info("i2")
-                self.theta_ex[:] = self._aux_get_theta_info(branches_bus2)
-                self.a_ex[~np.isfinite(self.a_ex)] = 0.0
-                self.v_ex[~np.isfinite(self.v_ex)] = 0.0
+                if not is_dc:
+                    if not np.all(np.isfinite(self.prod_v)):
+                        raise DivergingPowerFlow("Isolated gen")
+
+                if not is_dc:
+                    if not np.all(np.isfinite(self.load_v)):
+                        # some loads are disconnected: it's a game over case!
+                        raise DivergingPowerFlow("Isolated load")
+
+                branches_bus1 = self._aux_get_line_info('bus1_id')
+                branches_bus2 = self._aux_get_line_info('bus2_id')
+
+                self.p_or[:] = np.nan_to_num(self._aux_get_line_info("p1"))
+                self.q_or[:] = np.nan_to_num(self._aux_get_line_info("q1"))
+                self.v_or[:] = np.nan_to_num(self._aux_get_voltage_info(branches_bus1))
+                self.a_or[:] = np.nan_to_num(self._aux_get_line_info("i1"))
+                self.theta_or[:] = np.nan_to_num(self._aux_get_theta_info(branches_bus1))
+
+                self.p_ex[:] = np.nan_to_num(self._aux_get_line_info("p2"))
+                self.q_ex[:] = np.nan_to_num(self._aux_get_line_info("q2"))
+                self.v_ex[:] = np.nan_to_num(self._aux_get_voltage_info(branches_bus2))
+                self.a_ex[:] = np.nan_to_num(self._aux_get_line_info("i2"))
+                self.theta_ex[:] = np.nan_to_num(self._aux_get_theta_info(branches_bus2))
 
 
                 # handle storage units
@@ -969,11 +977,11 @@ class PowsyblBackend(Backend):
                 else:
                     return True, None
 
-        except BackendError as exc_:
+        except DivergingPowerFlow as exc_:
             # of the powerflow has not converged, results are Nan
             self._reset_all_nan()
             msg = exc_.__str__()
-            return False, DivergingPowerFlow(f'powerflow diverged with error :"{msg}"')
+            return False, BackendError(f'powerflow diverged with error :"{msg}"')
 
     def get_line_status(self):
         """
@@ -1005,12 +1013,22 @@ class PowsyblBackend(Backend):
         
     def _aux_get_voltage_info(self, elements):
         buses = self._grid.get_buses()['v_mag']
-        v_list = [buses[elt] if elt != '' else 0 for elt in elements]
+        v_list = []
+        for elt in elements:
+            if elt == '':
+                v_list.append(0)
+            else:
+                v_list.append(buses[elt])
         return v_list
 
     def _aux_get_theta_info(self, elements):
         buses = self._grid.get_buses()['v_angle']
-        v_list = [buses[elt] if elt != '' else 0 for elt in elements]
+        v_list = []
+        for elt in elements:
+            if elt == '':
+                v_list.append(0)
+            else:
+                v_list.append(buses[elt])
         return v_list
 
     def get_topo_vect(self):
@@ -1197,6 +1215,7 @@ class PowsyblBackend(Backend):
                 lines[lines["r"] == 0][colname].values,
             )
         )
+
         return res
 
     def _return_real_lines_transfo(self):

@@ -1,0 +1,5 @@
+.git/
+**/*.svg
+**/*.html
+**/*.xiidm
+**/__pycache__

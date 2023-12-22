@@ -1,5 +1,10 @@
 # pypowsybl-grid2opbackend integration (AIRGo project)
 
+### Attribution
+*This library is part of a project that has received funding from the European Union’s Horizon 2020 research and innovation programme under grant agreement No 101016508.*
+
+![AIRGoLogo](logos/i-nergy_logo.png)
+
 ## Prerequisite
 To be able to work properly with this backend integration you will have to install a specific version of pypowsybl.
 You can find it there : [specific pypowsybl branch](https://github.com/powsybl/pypowsybl/tree/move_connectable_prototype).
@@ -59,9 +64,29 @@ I copy/paste here a version of those requirements (from 10/10/2023).
 >```
 >
 ## Simple example of use
-In the script [ScriptForSimpleUseCase.py](src/ScriptForSimpleUseCase.py) you can find an example of simple agent doing 
+In the script [ScriptForSimpleUseCase.py](pypowsybl_grid2opbackend/ScriptForSimpleUseCase.py) you can find an example of simple agent doing 
 one action using our backend on the ieee14 case network. Some several actions could be taken up for you to 
 comment/decomment to act as you like on the network.
+
+## AirGo project dataset generation
+The dataset created for the needs of the project can be found [here](https://www.ai4europe.eu/research/ai-catalog/airgo-i-nergy-open-dataset).
+
+### Processes of creation
+This dataset was created using [chronics_creator.py](chronics_chreator.py). We generated data for january for exactly 4 
+weeks of 7 days with a 5 minutes step resolution. The given dates do not correspond to any real date. Every month starting 
+with a monday.
+
+For some simplification purpose each week of a given month have exactly the same probabilistic distribution, what differentiates  
+them is only the randomisation seed chose.
+
+### Potential use for machine learning
+In a classical machine learning training example we could decide for example to choose 3 weeks for training and 1 week for 
+evaluation purposes. Nevertheless, it is also possible to separate more precisely data based on time step for example, but 
+it will be more complicated.
+
+### How to create some more synthetic data
+If the available data are not enough we can create some more by changing the *nb_of_week* parameter in the main of the file.
+The data will be created starting from the month of january until december, 4 weeks per month each.
 
 ## Definition and comparison of objects between Pypowsybl and Grid2op
 
@@ -119,3 +144,9 @@ This is done by calling the _double_buses function in the PowsyblBackend.py file
 This allows the user to move any object from one bus to another in the backend. This function could only use bus_breaker_view
 buses id to work (different from bus_view buses id in pypowsybl). This is particularly useful for Grid2op topological 
 changes to switch any object from a bus to another inside a substation (only possible topological action in Grid2op)
+
+## License information
+Copyright 2023 Artelys: http://www.artelys.com
+
+This Source Code is subject to the terms of the Mozilla Public License (MPL) v2 also available
+[here](https://www.mozilla.org/en-US/MPL/2.0/) or [in the repository](LICENSE).

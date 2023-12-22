@@ -5,5 +5,3 @@
 # you can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 # This file is part of pypowsybl-grid2opbackend.
-
-__all__ = ["powsybl_backend"]
